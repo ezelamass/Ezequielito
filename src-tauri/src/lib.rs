@@ -1,4 +1,5 @@
 mod actions;
+mod active_window;
 mod app_launcher;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 mod apple_intelligence;
@@ -361,6 +362,7 @@ pub fn run(cli_args: CliArgs) {
             shortcut::update_custom_words,
             shortcut::update_snippets,
             shortcut::update_voice_commands,
+            shortcut::update_app_prompt_map,
             shortcut::set_dictionary_sync_path,
             shortcut::sync_dictionary_now,
             shortcut::suspend_binding,

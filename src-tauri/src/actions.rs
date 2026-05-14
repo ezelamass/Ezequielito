@@ -60,6 +60,11 @@ struct TranscribeAction {
     /// instruction. The current clipboard contents are read as "selection"
     /// and the LLM rewrites them per the instruction; result is pasted.
     edit_mode: bool,
+    /// Phase 11 (rescue): Auto-mode. When true, the foreground process
+    /// name is inspected and the prompt id is looked up in
+    /// `settings.app_prompt_map` at runtime. Overrides any static
+    /// `prompt_id_override` set on this action.
+    auto_context: bool,
 }
 
 /// Apply snippet substitutions to a transcription. Case-insensitive
@@ -650,6 +655,27 @@ impl ShortcutAction for TranscribeAction {
         let voice_command = self.voice_command;
         let prompt_id_override = self.prompt_id_override;
         let edit_mode = self.edit_mode;
+        let auto_context = self.auto_context;
+
+        // Phase 11 (rescue): resolve auto-mode prompt id synchronously here
+        // (before the spawn) so we capture the foreground app while the
+        // user's target window is still focused. Stored as String to keep
+        // ownership through the .await boundary.
+        let auto_resolved_prompt_id: Option<String> = if auto_context {
+            let proc = crate::active_window::active_process_name();
+            let settings = get_settings(app);
+            let resolved = proc
+                .as_deref()
+                .and_then(|name| settings.app_prompt_map.get(name).cloned())
+                .unwrap_or_else(|| "ez_casual".to_string());
+            debug!(
+                "Auto-mode: foreground process={:?} → prompt='{}'",
+                proc, resolved
+            );
+            Some(resolved)
+        } else {
+            None
+        };
 
         // Phase 8: snapshot the clipboard right at hotkey release. The user
         // is expected to have Ctrl+C'd their target text before pressing the
@@ -740,11 +766,20 @@ impl ShortcutAction for TranscribeAction {
                             if post_process {
                                 show_processing_overlay(&ah);
                             }
+                            // Phase 11 (rescue): auto-context wins over static override.
+                            let effective_prompt_id: Option<&str> = match (
+                                auto_resolved_prompt_id.as_deref(),
+                                prompt_id_override,
+                            ) {
+                                (Some(s), _) => Some(s),
+                                (None, Some(s)) => Some(s),
+                                _ => None,
+                            };
                             let processed = process_transcription_output(
                                 &ah,
                                 &transcription,
                                 post_process,
-                                prompt_id_override,
+                                effective_prompt_id,
                             )
                             .await;
 
@@ -937,6 +972,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             voice_command: false,
             prompt_id_override: None,
             edit_mode: false,
+            auto_context: false,
         }) as Arc<dyn ShortcutAction>,
     );
     map.insert(
@@ -946,6 +982,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             voice_command: false,
             prompt_id_override: None,
             edit_mode: false,
+            auto_context: false,
         }) as Arc<dyn ShortcutAction>,
     );
     // Phase 5: three transcribe modes, each forcing a specific LLM prompt
@@ -956,6 +993,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             voice_command: false,
             prompt_id_override: Some("ez_casual"),
             edit_mode: false,
+            auto_context: false,
         }) as Arc<dyn ShortcutAction>,
     );
     map.insert(
@@ -965,6 +1003,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             voice_command: false,
             prompt_id_override: Some("ez_formal"),
             edit_mode: false,
+            auto_context: false,
         }) as Arc<dyn ShortcutAction>,
     );
     map.insert(
@@ -974,6 +1013,18 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             voice_command: false,
             prompt_id_override: Some("ez_code"),
             edit_mode: false,
+            auto_context: false,
+        }) as Arc<dyn ShortcutAction>,
+    );
+    // Phase 11 (rescue): context-aware auto-mode
+    map.insert(
+        "transcribe_auto".to_string(),
+        Arc::new(TranscribeAction {
+            post_process: true,
+            voice_command: false,
+            prompt_id_override: None,
+            edit_mode: false,
+            auto_context: true,
         }) as Arc<dyn ShortcutAction>,
     );
     map.insert(
@@ -983,6 +1034,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             voice_command: true,
             prompt_id_override: None,
             edit_mode: false,
+            auto_context: false,
         }) as Arc<dyn ShortcutAction>,
     );
     // Phase 6: hands-free toggle (Space tap during recording)
@@ -998,6 +1050,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             voice_command: false,
             prompt_id_override: None,
             edit_mode: true,
+            auto_context: false,
         }) as Arc<dyn ShortcutAction>,
     );
     map.insert(

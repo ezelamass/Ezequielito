@@ -77,10 +77,48 @@ pub fn unregister_cancel_shortcut(app: &AppHandle) {
 /// Phase 6: register the hands-free toggle shortcut (Space). Called when
 /// recording starts; mirrors the cancel pattern so Space is only globally
 /// hijacked while a dictation is actively in progress.
+///
+/// Rescue: also skips registration when the hands_free_toggle key would
+/// conflict with any transcribe-flavour binding (e.g. transcribe is
+/// `ctrl+space` and hands_free_toggle is `space` — letting both register
+/// caused dictation to silently stop pasting because the user releasing
+/// Ctrl+Space looked like a fresh Space tap and locked the recording).
 pub fn register_hands_free_shortcut(app: &AppHandle) {
     let settings = get_settings(app);
     if !settings.hands_free_enabled {
         return;
+    }
+    let hf_key = settings
+        .bindings
+        .get("hands_free_toggle")
+        .map(|b| b.current_binding.trim().to_lowercase())
+        .unwrap_or_default();
+    if !hf_key.is_empty() {
+        const CONFLICTING_BINDINGS: &[&str] = &[
+            "transcribe",
+            "transcribe_with_post_process",
+            "transcribe_casual",
+            "transcribe_formal",
+            "transcribe_code",
+            "transcribe_auto",
+            "transcribe_edit",
+            "voice_command",
+        ];
+        for id in CONFLICTING_BINDINGS {
+            if let Some(b) = settings.bindings.get(*id) {
+                let combo = b.current_binding.trim().to_lowercase();
+                if combo.is_empty() {
+                    continue;
+                }
+                if combo.split('+').any(|part| part.trim() == hf_key) {
+                    log::warn!(
+                        "Skipping hands_free_toggle registration: '{}' conflicts with '{}' binding ({})",
+                        hf_key, id, combo
+                    );
+                    return;
+                }
+            }
+        }
     }
     match settings.keyboard_implementation {
         KeyboardImplementation::Tauri => tauri_impl::register_hands_free_shortcut(app),
@@ -707,6 +745,21 @@ pub fn set_dictionary_sync_path(app: AppHandle, path: String) -> Result<(), Stri
     } else {
         Some(trimmed.to_string())
     };
+    settings::write_settings(&app, current);
+    Ok(())
+}
+
+/// Phase 11 (rescue): update the app→prompt mapping used by the
+/// `transcribe_auto` binding. Map keys are lowercase exe names without
+/// the `.exe` suffix; values are LLMPrompt ids.
+#[tauri::command]
+#[specta::specta]
+pub fn update_app_prompt_map(
+    app: AppHandle,
+    map: std::collections::HashMap<String, String>,
+) -> Result<(), String> {
+    let mut current = settings::get_settings(&app);
+    current.app_prompt_map = map;
     settings::write_settings(&app, current);
     Ok(())
 }

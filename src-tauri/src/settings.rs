@@ -401,6 +401,12 @@ pub struct AppSettings {
     /// cross-device replication.
     #[serde(default)]
     pub dictionary_sync_path: Option<String>,
+    /// Phase 11 (rescue): map of foreground process name (lowercase, no
+    /// .exe) → post_process prompt id. Used by the `transcribe_auto`
+    /// binding to route a dictation through the right prompt based on
+    /// the app the user is typing into.
+    #[serde(default = "default_app_prompt_map")]
+    pub app_prompt_map: HashMap<String, String>,
     #[serde(default)]
     pub model_unload_timeout: ModelUnloadTimeout,
     #[serde(default = "default_word_correction_threshold")]
@@ -779,7 +785,52 @@ fn default_snippets() -> Vec<Snippet> {
 }
 
 fn default_hands_free_enabled() -> bool {
-    true
+    // Phase 6 rescue: disabled by default. The bare-Space toggle binding
+    // raced with Ctrl+Space (transcribe) and blocked the PTT release,
+    // making dictation silently never paste. Conflict guard + opt-in
+    // toggle in Settings restore safe behaviour; user re-enables when
+    // they've assigned a non-conflicting key (e.g. F2).
+    false
+}
+
+/// Phase 11 (rescue): default map of lowercase process name → prompt id
+/// for the `transcribe_auto` binding. Unknown apps fall back to ez_casual.
+fn default_app_prompt_map() -> HashMap<String, String> {
+    let mut m = HashMap::new();
+    // Code editors → ez_code
+    for app in [
+        "claude",
+        "cursor",
+        "code",
+        "windsurf",
+        "rider",
+        "idea64",
+        "pycharm64",
+        "webstorm64",
+        "devenv",
+        "notepad++",
+        "windowsterminal",
+        "powershell",
+        "wt",
+    ] {
+        m.insert(app.to_string(), "ez_code".to_string());
+    }
+    // Mail / formal → ez_formal
+    for app in ["outlook", "olk", "thunderbird", "msoutlook"] {
+        m.insert(app.to_string(), "ez_formal".to_string());
+    }
+    // Chats / casual → ez_casual (also the implicit fallback for unknown apps)
+    for app in [
+        "whatsapp",
+        "telegram",
+        "slack",
+        "discord",
+        "messenger",
+        "skype",
+    ] {
+        m.insert(app.to_string(), "ez_casual".to_string());
+    }
+    m
 }
 
 fn default_voice_commands() -> HashMap<String, String> {
@@ -922,6 +973,21 @@ pub fn get_default_settings() -> AppSettings {
         },
     );
 
+    // Phase 11 (rescue): context-aware transcription. Inspects the
+    // foreground app and routes the dictation through casual/formal/code
+    // automatically. No default key — user assigns.
+    bindings.insert(
+        "transcribe_auto".to_string(),
+        ShortcutBinding {
+            id: "transcribe_auto".to_string(),
+            name: "Transcribe (Auto)".to_string(),
+            description: "Auto-detects the foreground app and routes to casual/formal/code prompt."
+                .to_string(),
+            default_binding: String::new(),
+            current_binding: String::new(),
+        },
+    );
+
     // Phase 6 (Ezequielito): hands-free toggle. Bound to Space. NOT
     // registered globally — only registered dynamically while a recording
     // is active (see shortcut::register_hands_free_shortcut, mirrors
@@ -961,6 +1027,7 @@ pub fn get_default_settings() -> AppSettings {
         voice_commands: default_voice_commands(),
         hands_free_enabled: default_hands_free_enabled(),
         dictionary_sync_path: None,
+        app_prompt_map: default_app_prompt_map(),
         model_unload_timeout: ModelUnloadTimeout::default(),
         word_correction_threshold: default_word_correction_threshold(),
         history_limit: default_history_limit(),

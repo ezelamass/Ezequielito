@@ -116,10 +116,12 @@ const settingUpdaters: {
     commands.changeOverlayPositionSetting(value as string),
   debug_mode: (value) => commands.changeDebugModeSetting(value as boolean),
   custom_words: (value) => commands.updateCustomWords(value as string[]),
-  // Ezequielito fork: snippets + voice command map
+  // Ezequielito fork: snippets + voice command map + app prompt map
   snippets: (value) => commands.updateSnippets(value as Snippet[]),
   voice_commands: (value) =>
     commands.updateVoiceCommands(value as { [key: string]: string }),
+  app_prompt_map: (value) =>
+    commands.updateAppPromptMap(value as { [key: string]: string }),
   word_correction_threshold: (value) =>
     commands.changeWordCorrectionThresholdSetting(value as number),
   paste_delay_ms: (value) =>

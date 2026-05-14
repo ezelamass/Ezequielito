@@ -56,6 +56,7 @@ pub fn is_transcribe_binding(id: &str) -> bool {
             | "transcribe_casual"
             | "transcribe_formal"
             | "transcribe_code"
+            | "transcribe_auto"
             | "transcribe_edit"
             | "voice_command"
     )
