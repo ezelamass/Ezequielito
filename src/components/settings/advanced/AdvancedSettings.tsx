@@ -5,6 +5,7 @@ import { ModelUnloadTimeoutSetting } from "../ModelUnloadTimeout";
 import { CustomWords } from "../CustomWords";
 import { Snippets } from "../Snippets";
 import { VoiceCommands } from "../VoiceCommands";
+import { DictionarySync } from "../DictionarySync";
 import { SettingsGroup } from "../../ui/SettingsGroup";
 import { StartHidden } from "../StartHidden";
 import { AutostartToggle } from "../AutostartToggle";
@@ -54,6 +55,7 @@ export const AdvancedSettings: React.FC = () => {
 
       <SettingsGroup title="Ezequielito">
         <VoiceCommands descriptionMode="tooltip" grouped />
+        <DictionarySync descriptionMode="tooltip" grouped />
       </SettingsGroup>
 
       <SettingsGroup title={t("settings.advanced.groups.history")}>

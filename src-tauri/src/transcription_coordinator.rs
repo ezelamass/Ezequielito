@@ -46,6 +46,9 @@ pub fn is_transcribe_binding(id: &str) -> bool {
     // Phase 7: voice_command shares the record→transcribe pipeline; the
     // difference is that the resulting text triggers an app launcher
     // instead of paste (see TranscribeAction::stop in actions.rs).
+    // Phase 8: transcribe_edit also shares the pipeline; the difference is
+    // that the resulting text is treated as an LLM instruction applied to
+    // the clipboard selection, and the rewritten text is pasted.
     matches!(
         id,
         "transcribe"
@@ -53,6 +56,7 @@ pub fn is_transcribe_binding(id: &str) -> bool {
             | "transcribe_casual"
             | "transcribe_formal"
             | "transcribe_code"
+            | "transcribe_edit"
             | "voice_command"
     )
 }

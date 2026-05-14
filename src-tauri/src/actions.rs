@@ -56,6 +56,10 @@ struct TranscribeAction {
     /// formal / code) target a specific LLM prompt regardless of the
     /// globally selected one.
     prompt_id_override: Option<&'static str>,
+    /// Phase 8: Edit Mode. When true, the transcription is treated as an
+    /// instruction. The current clipboard contents are read as "selection"
+    /// and the LLM rewrites them per the instruction; result is pasted.
+    edit_mode: bool,
 }
 
 /// Apply snippet substitutions to a transcription. Case-insensitive
@@ -388,6 +392,83 @@ pub(crate) struct ProcessedTranscription {
     pub post_process_prompt: Option<String>,
 }
 
+/// Phase 8 (Edit Mode): Given a clipboard selection and a spoken instruction,
+/// send both to the configured post-process LLM and return the rewritten text.
+/// Falls back to `None` (caller pastes the raw instruction or skips) if
+/// post-processing isn't configured.
+async fn process_edit_mode_request(
+    settings: &AppSettings,
+    selection: &str,
+    instruction: &str,
+) -> Option<String> {
+    let provider = settings.active_post_process_provider().cloned()?;
+    let model = settings
+        .post_process_models
+        .get(&provider.id)
+        .cloned()
+        .unwrap_or_default();
+    if model.trim().is_empty() {
+        debug!("Edit Mode skipped — provider '{}' has no model", provider.id);
+        return None;
+    }
+    let api_key = settings
+        .post_process_api_keys
+        .get(&provider.id)
+        .cloned()
+        .unwrap_or_default();
+
+    // Disable reasoning to match the post-process behaviour for these providers.
+    let (reasoning_effort, reasoning) = match provider.id.as_str() {
+        "custom" => (Some("none".to_string()), None),
+        "openrouter" => (
+            None,
+            Some(crate::llm_client::ReasoningConfig {
+                effort: Some("none".to_string()),
+                exclude: Some(true),
+            }),
+        ),
+        _ => (None, None),
+    };
+
+    let system_prompt = "Sos un editor de texto. El usuario te pasa un texto seleccionado y una instrucción. Aplicá la instrucción al texto. Devolvé SOLO el texto nuevo, sin preámbulo, sin explicaciones, sin comillas, sin markdown. Si la instrucción es ambigua, hacé tu mejor interpretación. Mantené el idioma del texto original.".to_string();
+    let user_content = format!(
+        "Texto seleccionado:\n<<<\n{}\n>>>\n\nInstrucción:\n{}",
+        selection.trim(),
+        instruction.trim()
+    );
+
+    debug!(
+        "Edit Mode LLM call: provider '{}' model '{}' (selection {} chars, instruction {} chars)",
+        provider.id,
+        model,
+        selection.len(),
+        instruction.len()
+    );
+
+    match crate::llm_client::send_chat_completion_with_schema(
+        &provider,
+        api_key,
+        &model,
+        user_content,
+        Some(system_prompt),
+        None,
+        reasoning_effort,
+        reasoning,
+    )
+    .await
+    {
+        Ok(Some(text)) => Some(text.trim().to_string()),
+        Ok(None) => {
+            warn!("Edit Mode: LLM returned empty content");
+            None
+        }
+        Err(e) => {
+            error!("Edit Mode LLM call failed: {}", e);
+            None
+        }
+    }
+}
+
 pub(crate) async fn process_transcription_output(
     app: &AppHandle,
     transcription: &str,
@@ -568,6 +649,27 @@ impl ShortcutAction for TranscribeAction {
         let post_process = self.post_process;
         let voice_command = self.voice_command;
         let prompt_id_override = self.prompt_id_override;
+        let edit_mode = self.edit_mode;
+
+        // Phase 8: snapshot the clipboard right at hotkey release. The user
+        // is expected to have Ctrl+C'd their target text before pressing the
+        // Edit Mode hotkey, so this captures the staged selection.
+        let edit_selection: Option<String> = if edit_mode {
+            use tauri_plugin_clipboard_manager::ClipboardExt;
+            match app.clipboard().read_text() {
+                Ok(text) if !text.trim().is_empty() => Some(text),
+                Ok(_) => {
+                    warn!("Edit Mode: clipboard is empty — copy your target text first");
+                    None
+                }
+                Err(e) => {
+                    warn!("Edit Mode: failed to read clipboard: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
 
         tauri::async_runtime::spawn(async move {
             let _guard = FinishGuard(ah.clone());
@@ -663,8 +765,36 @@ impl ShortcutAction for TranscribeAction {
                             // between LLM cleanup and paste. Custom-words substitution
                             // already ran inside `transcription.rs`.
                             let snippets = get_settings(&ah).snippets;
-                            let final_text =
+                            let mut final_text =
                                 apply_snippets(&processed.final_text, &snippets);
+
+                            // Phase 8: if Edit Mode, treat `final_text` as an
+                            // instruction and rewrite the captured selection
+                            // via the LLM. Result replaces final_text and falls
+                            // through to the standard paste flow.
+                            if edit_mode {
+                                if let Some(selection) = edit_selection.as_ref() {
+                                    let settings = get_settings(&ah);
+                                    if let Some(rewritten) = process_edit_mode_request(
+                                        &settings,
+                                        selection,
+                                        &final_text,
+                                    )
+                                    .await
+                                    {
+                                        debug!(
+                                            "Edit Mode rewrite: {} → {} chars",
+                                            selection.len(),
+                                            rewritten.len()
+                                        );
+                                        final_text = rewritten;
+                                    } else {
+                                        warn!("Edit Mode: rewrite failed; pasting instruction as-is");
+                                    }
+                                } else {
+                                    warn!("Edit Mode: no selection captured; pasting instruction as-is");
+                                }
+                            }
 
                             if final_text.is_empty() {
                                 utils::hide_recording_overlay(&ah);
@@ -806,6 +936,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             post_process: false,
             voice_command: false,
             prompt_id_override: None,
+            edit_mode: false,
         }) as Arc<dyn ShortcutAction>,
     );
     map.insert(
@@ -814,6 +945,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             post_process: true,
             voice_command: false,
             prompt_id_override: None,
+            edit_mode: false,
         }) as Arc<dyn ShortcutAction>,
     );
     // Phase 5: three transcribe modes, each forcing a specific LLM prompt
@@ -823,6 +955,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             post_process: true,
             voice_command: false,
             prompt_id_override: Some("ez_casual"),
+            edit_mode: false,
         }) as Arc<dyn ShortcutAction>,
     );
     map.insert(
@@ -831,6 +964,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             post_process: true,
             voice_command: false,
             prompt_id_override: Some("ez_formal"),
+            edit_mode: false,
         }) as Arc<dyn ShortcutAction>,
     );
     map.insert(
@@ -839,6 +973,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             post_process: true,
             voice_command: false,
             prompt_id_override: Some("ez_code"),
+            edit_mode: false,
         }) as Arc<dyn ShortcutAction>,
     );
     map.insert(
@@ -847,12 +982,23 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             post_process: false,
             voice_command: true,
             prompt_id_override: None,
+            edit_mode: false,
         }) as Arc<dyn ShortcutAction>,
     );
     // Phase 6: hands-free toggle (Space tap during recording)
     map.insert(
         "hands_free_toggle".to_string(),
         Arc::new(HandsFreeToggleAction) as Arc<dyn ShortcutAction>,
+    );
+    // Phase 8: Edit Mode — clipboard selection + spoken instruction → LLM rewrite
+    map.insert(
+        "transcribe_edit".to_string(),
+        Arc::new(TranscribeAction {
+            post_process: false,
+            voice_command: false,
+            prompt_id_override: None,
+            edit_mode: true,
+        }) as Arc<dyn ShortcutAction>,
     );
     map.insert(
         "cancel".to_string(),

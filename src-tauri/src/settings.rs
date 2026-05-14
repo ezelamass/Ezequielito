@@ -394,6 +394,13 @@ pub struct AppSettings {
     /// continues until Space is tapped again). Default true.
     #[serde(default = "default_hands_free_enabled")]
     pub hands_free_enabled: bool,
+    /// Phase 9: Optional path to a JSON file used to sync `custom_words`
+    /// across devices. If set, `sync_dictionary_now` merges the contents
+    /// of the file with the in-memory list and writes back. Designed to
+    /// live inside OneDrive/Dropbox/Google Drive so the cloud handles
+    /// cross-device replication.
+    #[serde(default)]
+    pub dictionary_sync_path: Option<String>,
     #[serde(default)]
     pub model_unload_timeout: ModelUnloadTimeout,
     #[serde(default = "default_word_correction_threshold")]
@@ -900,6 +907,21 @@ pub fn get_default_settings() -> AppSettings {
         },
     );
 
+    // Phase 8: Edit Mode. User copies text first (Ctrl+C), holds this
+    // hotkey + dictates an instruction; LLM rewrites the clipboard
+    // selection per the instruction, result is pasted.
+    bindings.insert(
+        "transcribe_edit".to_string(),
+        ShortcutBinding {
+            id: "transcribe_edit".to_string(),
+            name: "Edit Mode".to_string(),
+            description: "Copy text first, then hold + dictate instruction. LLM rewrites and pastes."
+                .to_string(),
+            default_binding: String::new(),
+            current_binding: String::new(),
+        },
+    );
+
     // Phase 6 (Ezequielito): hands-free toggle. Bound to Space. NOT
     // registered globally — only registered dynamically while a recording
     // is active (see shortcut::register_hands_free_shortcut, mirrors
@@ -938,6 +960,7 @@ pub fn get_default_settings() -> AppSettings {
         snippets: default_snippets(),
         voice_commands: default_voice_commands(),
         hands_free_enabled: default_hands_free_enabled(),
+        dictionary_sync_path: None,
         model_unload_timeout: ModelUnloadTimeout::default(),
         word_correction_threshold: default_word_correction_threshold(),
         history_limit: default_history_limit(),

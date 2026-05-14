@@ -696,6 +696,93 @@ pub fn update_voice_commands(
     Ok(())
 }
 
+/// Phase 9: set (or clear) the dictionary sync file path. Empty string = None.
+#[tauri::command]
+#[specta::specta]
+pub fn set_dictionary_sync_path(app: AppHandle, path: String) -> Result<(), String> {
+    let mut current = settings::get_settings(&app);
+    let trimmed = path.trim();
+    current.dictionary_sync_path = if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    };
+    settings::write_settings(&app, current);
+    Ok(())
+}
+
+/// Phase 9: bidirectional sync between `custom_words` and the configured
+/// JSON file. Reads the file (if exists), merges with the in-memory list
+/// (deduped, preserves order: file entries first, then any local-only
+/// entries appended), saves the merged list to both settings and file.
+///
+/// Returns the merged words list so the frontend can refresh its view.
+#[tauri::command]
+#[specta::specta]
+pub fn sync_dictionary_now(app: AppHandle) -> Result<Vec<String>, String> {
+    use std::collections::HashSet;
+    use std::fs;
+    use std::path::Path;
+
+    let mut current = settings::get_settings(&app);
+    let path_str = match &current.dictionary_sync_path {
+        Some(p) if !p.trim().is_empty() => p.clone(),
+        _ => return Err("Dictionary sync path is not configured".to_string()),
+    };
+    let path = Path::new(&path_str);
+
+    // Load remote words from file if it exists.
+    let remote_words: Vec<String> = if path.exists() {
+        let content = fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read sync file {}: {}", path.display(), e))?;
+        if content.trim().is_empty() {
+            Vec::new()
+        } else {
+            serde_json::from_str::<Vec<String>>(&content).map_err(|e| {
+                format!(
+                    "Sync file {} is not a valid JSON array of strings: {}",
+                    path.display(),
+                    e
+                )
+            })?
+        }
+    } else {
+        Vec::new()
+    };
+
+    // Merge: file entries first (preserves order set by user across devices),
+    // then any local-only entries appended.
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut merged: Vec<String> = Vec::new();
+    for word in remote_words.into_iter().chain(current.custom_words.iter().cloned()) {
+        let normalized = word.trim().to_string();
+        if normalized.is_empty() {
+            continue;
+        }
+        if seen.insert(normalized.to_lowercase()) {
+            merged.push(normalized);
+        }
+    }
+
+    // Ensure parent directory exists (e.g. user typed a path inside OneDrive).
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).map_err(|e| {
+                format!("Failed to create parent dir for sync file: {}", e)
+            })?;
+        }
+    }
+
+    let json = serde_json::to_string_pretty(&merged)
+        .map_err(|e| format!("Failed to serialize merged dictionary: {}", e))?;
+    fs::write(path, json)
+        .map_err(|e| format!("Failed to write sync file {}: {}", path.display(), e))?;
+
+    current.custom_words = merged.clone();
+    settings::write_settings(&app, current);
+    Ok(merged)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn change_word_correction_threshold_setting(
