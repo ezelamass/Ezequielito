@@ -38,7 +38,11 @@ pub struct TranscriptionCoordinator {
 }
 
 pub fn is_transcribe_binding(id: &str) -> bool {
-    id == "transcribe" || id == "transcribe_with_post_process"
+    // `voice_command` is treated as a transcribe binding because it follows
+    // the same record→transcribe pipeline; the difference is that the
+    // resulting text triggers an app launcher instead of paste (see
+    // TranscribeAction::stop in actions.rs).
+    id == "transcribe" || id == "transcribe_with_post_process" || id == "voice_command"
 }
 
 impl TranscriptionCoordinator {

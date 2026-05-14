@@ -1,3 +1,4 @@
+use crate::app_launcher;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 use crate::apple_intelligence;
 use crate::audio_feedback::{play_feedback_sound, play_feedback_sound_blocking, SoundType};
@@ -5,7 +6,7 @@ use crate::audio_toolkit::{is_microphone_access_denied, is_no_input_device_error
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::history::HistoryManager;
 use crate::managers::transcription::TranscriptionManager;
-use crate::settings::{get_settings, AppSettings, APPLE_INTELLIGENCE_PROVIDER_ID};
+use crate::settings::{get_settings, AppSettings, Snippet, APPLE_INTELLIGENCE_PROVIDER_ID};
 use crate::shortcut;
 use crate::tray::{change_tray_icon, TrayIconState};
 use crate::utils::{
@@ -47,6 +48,33 @@ pub trait ShortcutAction: Send + Sync {
 // Transcribe Action
 struct TranscribeAction {
     post_process: bool,
+    /// When true, the transcription is matched against `voice_commands`
+    /// and used to launch an app via `app_launcher` instead of being pasted.
+    voice_command: bool,
+}
+
+/// Apply snippet substitutions to a transcription. Case-insensitive
+/// whole-word match on `trigger`; first match wins (snippets are applied
+/// in the order they appear in settings). Runs after `apply_custom_words`
+/// (which executes inside `transcription.rs`) and after optional LLM
+/// cleanup, but before paste.
+fn apply_snippets(text: &str, snippets: &[Snippet]) -> String {
+    if snippets.is_empty() {
+        return text.to_string();
+    }
+    let mut result = text.to_string();
+    for snippet in snippets {
+        let trigger = snippet.trigger.trim();
+        if trigger.is_empty() {
+            continue;
+        }
+        // Whole-word case-insensitive replace using regex
+        let pattern = format!(r"(?i)\b{}\b", regex::escape(trigger));
+        if let Ok(re) = regex::Regex::new(&pattern) {
+            result = re.replace_all(&result, snippet.expansion.as_str()).into_owned();
+        }
+    }
+    result
 }
 
 /// Field name for structured output JSON schema
@@ -512,6 +540,7 @@ impl ShortcutAction for TranscribeAction {
 
         let binding_id = binding_id.to_string(); // Clone binding_id for the async task
         let post_process = self.post_process;
+        let voice_command = self.voice_command;
 
         tauri::async_runtime::spawn(async move {
             let _guard = FinishGuard(ah.clone());
@@ -599,15 +628,36 @@ impl ShortcutAction for TranscribeAction {
                                 }
                             }
 
-                            if processed.final_text.is_empty() {
+                            // Apply user snippets (voice-trigger → text expansion)
+                            // between LLM cleanup and paste. Custom-words substitution
+                            // already ran inside `transcription.rs`.
+                            let snippets = get_settings(&ah).snippets;
+                            let final_text =
+                                apply_snippets(&processed.final_text, &snippets);
+
+                            if final_text.is_empty() {
+                                utils::hide_recording_overlay(&ah);
+                                change_tray_icon(&ah, TrayIconState::Idle);
+                            } else if voice_command {
+                                // Voice-command mode: don't paste; instead, look
+                                // the phrase up in `voice_commands` and launch.
+                                let commands = get_settings(&ah).voice_commands;
+                                match app_launcher::match_and_launch(&final_text, &commands) {
+                                    Ok(phrase) => debug!("Voice command launched: '{}'", phrase),
+                                    Err(e) => {
+                                        warn!("{}", e);
+                                        // Emit an event so the frontend can show a toast/notification
+                                        let _ = ah.emit("voice-command-miss", final_text.clone());
+                                    }
+                                }
                                 utils::hide_recording_overlay(&ah);
                                 change_tray_icon(&ah, TrayIconState::Idle);
                             } else {
                                 let ah_clone = ah.clone();
                                 let paste_time = Instant::now();
-                                let final_text = processed.final_text;
+                                let final_text_clone = final_text.clone();
                                 ah.run_on_main_thread(move || {
-                                    match utils::paste(final_text, ah_clone.clone()) {
+                                    match utils::paste(final_text_clone, ah_clone.clone()) {
                                         Ok(()) => debug!(
                                             "Text pasted successfully in {:?}",
                                             paste_time.elapsed()
@@ -703,11 +753,22 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
         "transcribe".to_string(),
         Arc::new(TranscribeAction {
             post_process: false,
+            voice_command: false,
         }) as Arc<dyn ShortcutAction>,
     );
     map.insert(
         "transcribe_with_post_process".to_string(),
-        Arc::new(TranscribeAction { post_process: true }) as Arc<dyn ShortcutAction>,
+        Arc::new(TranscribeAction {
+            post_process: true,
+            voice_command: false,
+        }) as Arc<dyn ShortcutAction>,
+    );
+    map.insert(
+        "voice_command".to_string(),
+        Arc::new(TranscribeAction {
+            post_process: false,
+            voice_command: true,
+        }) as Arc<dyn ShortcutAction>,
     );
     map.insert(
         "cancel".to_string(),

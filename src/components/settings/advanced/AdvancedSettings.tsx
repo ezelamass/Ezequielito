@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { ShowOverlay } from "../ShowOverlay";
 import { ModelUnloadTimeoutSetting } from "../ModelUnloadTimeout";
 import { CustomWords } from "../CustomWords";
+import { Snippets } from "../Snippets";
+import { VoiceCommands } from "../VoiceCommands";
 import { SettingsGroup } from "../../ui/SettingsGroup";
 import { StartHidden } from "../StartHidden";
 import { AutostartToggle } from "../AutostartToggle";
@@ -46,7 +48,12 @@ export const AdvancedSettings: React.FC = () => {
 
       <SettingsGroup title={t("settings.advanced.groups.transcription")}>
         <CustomWords descriptionMode="tooltip" grouped />
+        <Snippets descriptionMode="tooltip" grouped />
         <AppendTrailingSpace descriptionMode="tooltip" grouped={true} />
+      </SettingsGroup>
+
+      <SettingsGroup title="Ezequielito">
+        <VoiceCommands descriptionMode="tooltip" grouped />
       </SettingsGroup>
 
       <SettingsGroup title={t("settings.advanced.groups.history")}>

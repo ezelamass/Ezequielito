@@ -93,6 +93,15 @@ pub struct LLMPrompt {
     pub prompt: String,
 }
 
+/// Voice trigger → text expansion. When a transcription contains the
+/// `trigger` phrase (case-insensitive, whole-word), it is replaced by
+/// `expansion` before being pasted.
+#[derive(Serialize, Deserialize, Debug, Clone, Type)]
+pub struct Snippet {
+    pub trigger: String,
+    pub expansion: String,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Type)]
 pub struct PostProcessProvider {
     pub id: String,
@@ -371,6 +380,15 @@ pub struct AppSettings {
     pub log_level: LogLevel,
     #[serde(default)]
     pub custom_words: Vec<String>,
+    /// Voice triggers → text expansions, applied after custom_words and
+    /// before post-processing/paste. See `Snippet` and `apply_snippets`.
+    #[serde(default = "default_snippets")]
+    pub snippets: Vec<Snippet>,
+    /// Voice command map: spoken phrase → launchable target (URI like
+    /// `claude://` or executable like `chrome.exe`). Used when the
+    /// `voice_command` hotkey binding fires.
+    #[serde(default = "default_voice_commands")]
+    pub voice_commands: HashMap<String, String>,
     #[serde(default)]
     pub model_unload_timeout: ModelUnloadTimeout,
     #[serde(default = "default_word_correction_threshold")]
@@ -712,6 +730,38 @@ fn ensure_post_process_defaults(settings: &mut AppSettings) -> bool {
 
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
+fn default_snippets() -> Vec<Snippet> {
+    vec![
+        Snippet {
+            trigger: "mi email".to_string(),
+            expansion: "ezequiellamasx@gmail.com".to_string(),
+        },
+        Snippet {
+            trigger: "mi calendly".to_string(),
+            expansion: "https://calendly.com/ezequiel-lamas".to_string(),
+        },
+        Snippet {
+            trigger: "mi firma".to_string(),
+            expansion: "Saludos,\nEzequiel Lamas\nUGC Studio".to_string(),
+        },
+    ]
+}
+
+fn default_voice_commands() -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    map.insert("claude code".to_string(), "claude://".to_string());
+    map.insert("claude".to_string(), "claude://".to_string());
+    map.insert("whatsapp".to_string(), "whatsapp://".to_string());
+    map.insert("chrome".to_string(), "chrome".to_string());
+    map.insert("notion".to_string(), "notion://".to_string());
+    map.insert("cursor".to_string(), "cursor://".to_string());
+    map.insert("spotify".to_string(), "spotify:".to_string());
+    map.insert("calculator".to_string(), "calc.exe".to_string());
+    map.insert("calculadora".to_string(), "calc.exe".to_string());
+    map.insert("explorer".to_string(), "explorer.exe".to_string());
+    map
+}
+
 pub fn get_default_settings() -> AppSettings {
     #[cfg(target_os = "windows")]
     let default_shortcut = "ctrl+space";
@@ -764,6 +814,30 @@ pub fn get_default_settings() -> AppSettings {
         },
     );
 
+    // Voice-command binding (Ezequielito fork): hold this hotkey, say
+    // "abrir Claude Code" or similar; the launcher fires `cmd /C start`
+    // against the matching entry in `voice_commands`. No paste.
+    #[cfg(target_os = "windows")]
+    let default_voice_command_shortcut = "right ctrl";
+    #[cfg(target_os = "macos")]
+    let default_voice_command_shortcut = "right option";
+    #[cfg(target_os = "linux")]
+    let default_voice_command_shortcut = "right ctrl";
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    let default_voice_command_shortcut = "right ctrl";
+
+    bindings.insert(
+        "voice_command".to_string(),
+        ShortcutBinding {
+            id: "voice_command".to_string(),
+            name: "Voice Command".to_string(),
+            description: "Speak the name of an app (e.g. 'open Claude Code') to launch it."
+                .to_string(),
+            default_binding: default_voice_command_shortcut.to_string(),
+            current_binding: default_voice_command_shortcut.to_string(),
+        },
+    );
+
     AppSettings {
         bindings,
         push_to_talk: true,
@@ -784,6 +858,8 @@ pub fn get_default_settings() -> AppSettings {
         debug_mode: false,
         log_level: default_log_level(),
         custom_words: Vec::new(),
+        snippets: default_snippets(),
+        voice_commands: default_voice_commands(),
         model_unload_timeout: ModelUnloadTimeout::default(),
         word_correction_threshold: default_word_correction_threshold(),
         history_limit: default_history_limit(),
