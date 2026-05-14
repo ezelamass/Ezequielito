@@ -493,7 +493,8 @@ pub fn run(cli_args: CliArgs) {
         }))
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        // updater plugin removed in Ezequielito fork — we don't ship auto-updates;
+        // re-add with `[plugins.updater]` config in tauri.conf.json + pubkey if needed
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_macos_permissions::init())
