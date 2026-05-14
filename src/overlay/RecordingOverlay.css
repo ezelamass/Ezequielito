@@ -1,95 +1,247 @@
-.recording-overlay {
-  height: 36px;
-  width: 172px;
+/*
+ * Recording overlay — Ezequielito brand
+ *
+ * Wispr-Flow-style floating pill. Dark, lime accent during recording,
+ * warm orange when hands-free locked. Buttons are circular: X on the
+ * left for cancel, ✓ on the right when locked.
+ *
+ * Sourced palette: --ez-bg #0a0a0a, --ez-accent #c8ff00,
+ *                   --ez-warm #ff6b35, --ez-text #e8e4de
+ */
+
+:root {
+  --ez-pill-bg: #0a0a0aee;
+  --ez-pill-border: #2a2a2a;
+  --ez-pill-accent: #c8ff00;
+  --ez-pill-warm: #ff6b35;
+  --ez-pill-text: #e8e4de;
+  --ez-pill-muted: #8a8580;
+}
+
+.ez-pill {
+  position: relative;
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  padding: 6px;
-  background: #000000cc;
-  border-radius: 18px;
+  gap: 8px;
+  height: 40px;
+  min-width: 200px;
+  max-width: 320px;
+  padding: 0 10px;
+  background: var(--ez-pill-bg);
+  border: 1px solid var(--ez-pill-border);
+  border-radius: 999px;
   opacity: 0;
-  transition: opacity 300ms ease-out;
+  transform: translateY(8px) scale(0.96);
+  transition:
+    opacity 220ms ease-out,
+    transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 200ms ease-out,
+    box-shadow 200ms ease-out;
   box-sizing: border-box;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ez-pill-text);
+  -webkit-app-region: drag;
+  user-select: none;
 }
 
-.overlay-left {
-  display: flex;
-  align-items: center;
-}
-
-.overlay-middle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.overlay-right {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-}
-
-.bars-container {
-  display: flex;
-  align-items: end;
-  justify-content: center;
-  gap: 3px;
-  padding-bottom: 0px;
-  height: 24px;
-  overflow: hidden;
-}
-
-.bar {
-  width: 6px;
-  background: #ffe5ee;
-  max-height: 20px;
-  border-radius: 2px;
-  transition: height 80ms linear;
-  min-height: 4px;
-}
-
-.recording-overlay.fade-in {
+.ez-pill--visible {
   opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
-.transcribing-text {
-  color: white;
-  font-size: 12px;
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  animation: transcribing-pulse 1.5s infinite ease-in-out;
+/* Subtle lime glow + brightened border while actively recording */
+.ez-pill--visible:not(.ez-pill--processing):not(.ez-pill--locked) {
+  border-color: rgba(200, 255, 0, 0.22);
+  box-shadow: 0 0 0 1px rgba(200, 255, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
-@keyframes transcribing-pulse {
-  0%,
-  100% {
-    opacity: 0.6;
-  }
-  50% {
-    opacity: 1;
-  }
+/* Hands-free locked: warm orange border to signal "you can let go now" */
+.ez-pill--locked {
+  border-color: rgba(255, 107, 53, 0.55);
+  box-shadow: 0 0 0 1px rgba(255, 107, 53, 0.1), 0 4px 14px rgba(0, 0, 0, 0.45);
 }
 
-.cancel-button {
-  width: 24px;
-  height: 24px;
+/* Processing: dimmer */
+.ez-pill--processing {
+  border-color: var(--ez-pill-border);
+  opacity: 0.92;
+}
+
+.ez-pill__left,
+.ez-pill__right {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+}
+
+.ez-pill__center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 130px;
+  height: 100%;
+}
+
+/* Circular button base (cancel + confirm) */
+.ez-pill__btn {
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
+  border: none;
   background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  color: var(--ez-pill-muted);
+  -webkit-app-region: no-drag;
   transition:
     background-color 150ms ease-out,
+    color 150ms ease-out,
     transform 100ms ease-out;
-  flex-shrink: 0;
+  padding: 0;
 }
 
-.cancel-button:hover {
-  background: #faa2ca33;
-  transform: scale(1.05);
+.ez-pill__btn:hover {
+  transform: scale(1.08);
 }
 
-.cancel-button:active {
-  transform: scale(0.95);
+.ez-pill__btn:active {
+  transform: scale(0.94);
+}
+
+.ez-pill__btn--cancel:hover {
+  background: rgba(255, 107, 53, 0.18);
+  color: var(--ez-pill-warm);
+}
+
+.ez-pill__btn--confirm {
+  color: var(--ez-pill-accent);
+}
+
+.ez-pill__btn--confirm:hover {
+  background: rgba(200, 255, 0, 0.18);
+}
+
+/* Waveform: lime bars, equally spaced */
+.ez-pill__waveform {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 26px;
+  width: 100%;
+}
+
+.ez-pill__bar {
+  width: 4px;
+  min-height: 3px;
+  background: var(--ez-pill-accent);
+  border-radius: 2px;
+  transition: height 70ms ease-out, opacity 100ms ease-out;
+}
+
+.ez-pill--locked .ez-pill__bar {
+  background: var(--ez-pill-warm);
+}
+
+/* Spinner during transcribing / processing — Wispr-style dot circle */
+.ez-pill__spinner {
+  position: relative;
+  width: 22px;
+  height: 22px;
+}
+
+.ez-pill__spinner span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 3px;
+  margin: -1.5px 0 0 -1.5px;
+  border-radius: 50%;
+  background: var(--ez-pill-accent);
+  opacity: 0.25;
+  animation: ez-pill-spinner-fade 1s linear infinite;
+}
+
+.ez-pill__spinner span:nth-child(1) {
+  transform: translate(0, -9px);
+  animation-delay: 0s;
+}
+.ez-pill__spinner span:nth-child(2) {
+  transform: translate(6px, -6px);
+  animation-delay: 0.125s;
+}
+.ez-pill__spinner span:nth-child(3) {
+  transform: translate(9px, 0);
+  animation-delay: 0.25s;
+}
+.ez-pill__spinner span:nth-child(4) {
+  transform: translate(6px, 6px);
+  animation-delay: 0.375s;
+}
+.ez-pill__spinner span:nth-child(5) {
+  transform: translate(0, 9px);
+  animation-delay: 0.5s;
+}
+.ez-pill__spinner span:nth-child(6) {
+  transform: translate(-6px, 6px);
+  animation-delay: 0.625s;
+}
+.ez-pill__spinner span:nth-child(7) {
+  transform: translate(-9px, 0);
+  animation-delay: 0.75s;
+}
+.ez-pill__spinner span:nth-child(8) {
+  transform: translate(-6px, -6px);
+  animation-delay: 0.875s;
+}
+
+@keyframes ez-pill-spinner-fade {
+  0%,
+  39%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+/* Hands-free badge: small mono pill below the main one */
+.ez-pill__lock-badge {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  font-size: 9px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  letter-spacing: 0.12em;
+  color: var(--ez-pill-warm);
+  background: var(--ez-pill-bg);
+  border: 1px solid rgba(255, 107, 53, 0.5);
+  border-radius: 999px;
+  animation: ez-pill-lock-pop 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes ez-pill-lock-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -4px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+/* Make the body fully transparent so the pill floats over any app */
+body {
+  background: transparent !important;
+  margin: 0;
+  padding: 0;
 }
