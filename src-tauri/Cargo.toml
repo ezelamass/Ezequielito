@@ -1,8 +1,8 @@
 [package]
 name = "handy"
-version = "0.8.3"
-description = "Handy"
-authors = ["cjpais"]
+version = "0.1.0"
+description = "Ezequielito - Personal dictation app (fork of Handy by cjpais)"
+authors = ["Ezequiel Lamas <ezequiellamasx@gmail.com>"]
 edition = "2021"
 license = "MIT"
 default-run = "handy"
@@ -88,7 +88,9 @@ tauri-plugin-single-instance = "2.3.2"
 tauri-plugin-updater = "2.10.0"
 
 [target.'cfg(windows)'.dependencies]
-transcribe-rs = { version = "0.3.3", features = ["whisper-vulkan", "ort-directml"] }
+# Note: whisper-vulkan dropped — Parakeet V3 (ONNX/DirectML) is the only model we use.
+# Whisper falls back to CPU (whisper-cpp). Skips Vulkan SDK build complexity.
+transcribe-rs = { version = "0.3.3", features = ["whisper-cpp", "ort-directml"] }
 windows = { version = "0.61.3", features = [
   "Win32_Media_Audio_Endpoints",
   "Win32_System_Com_StructuredStorage",

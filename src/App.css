@@ -1,46 +1,54 @@
 @import "tailwindcss";
 
+/*
+ * Ezequielito brand identity — sourced from ezequiellamas-landing
+ * Dark-mode only. Lime accent on pitch black, warm-beige text.
+ */
 @theme {
-  /* Design tokens */
-  --color-text: #0f0f0f;
-  --color-background: #fbfbfb;
-  --color-background-ui: #da5893;
-  --color-logo-primary: #faa2ca;
-  --color-logo-stroke: #382731;
-  --color-text-stroke: #f6f6f6;
-  --color-mid-gray: #808080;
+  /* Brand color tokens (--ez-* and Tailwind --color-* aliases) */
+  --color-ez-bg: #0a0a0a;
+  --color-ez-surface: #111111;
+  --color-ez-accent: #c8ff00; /* lime — recording indicator, active states, primary accent */
+  --color-ez-warm: #ff6b35; /* warm orange — hands-free locked, warnings */
+  --color-ez-blue: #4a9eff; /* tertiary — links, info */
+  --color-ez-text: #e8e4de; /* warm beige off-white */
+  --color-ez-text-muted: #8a8580; /* muted tan */
+  --color-ez-border: #1e1e1e;
+  --color-ez-border-hover: #2a2a2a;
+
+  /* Backwards-compatible aliases for legacy Handy class names */
+  --color-text: var(--color-ez-text);
+  --color-background: var(--color-ez-bg);
+  --color-background-ui: var(--color-ez-surface);
+  --color-logo-primary: var(--color-ez-accent);
+  --color-logo-stroke: var(--color-ez-bg);
+  --color-text-stroke: var(--color-ez-border);
+  --color-mid-gray: var(--color-ez-text-muted);
 }
 
 :root {
   /* Typography */
+  font-family: "DM Sans", system-ui, -apple-system, sans-serif;
   font-size: 15px;
-  line-height: 24px;
+  line-height: 1.5;
   font-weight: 400;
-
-  /* Colors - Light Theme */
-  /* --color-text: #0f0f0f;
-  --color-background: #fbfbfb;
-  --color-logo-primary: #FAA2CA;
-  --color-logo-stroke: #382731;
-  --color-text-stroke: #f6f6f6; */
-
-  /* Typography settings */
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
 
-  --scrollbar-thumb: color-mix(in srgb, var(--color-text), transparent 85%);
+  /* Apply brand palette */
+  color: var(--color-ez-text);
+  background-color: var(--color-ez-bg);
+  color-scheme: dark;
+
+  --scrollbar-thumb: color-mix(in srgb, var(--color-ez-text), transparent 85%);
   --scrollbar-thumb-hover: color-mix(
     in srgb,
-    var(--color-text),
+    var(--color-ez-text),
     transparent 70%
   );
-
-  /* Apply colors */
-  color: var(--color-text);
-  background-color: var(--color-background);
 }
 
 .container {
@@ -50,16 +58,6 @@
   flex-direction: column;
   justify-content: center;
   text-align: center;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Colors - Dark Theme */
-    --color-text: #fbfbfb;
-    --color-background: #2c2b29;
-    --color-logo-primary: #f28cbb;
-    --color-logo-stroke: #fad1ed;
-  }
 }
 
 /* macOS - tint native overlay scrollbar thumb */
@@ -93,16 +91,44 @@
 
 @layer utilities {
   .text-stroke {
-    -webkit-text-stroke: 2px var(--color-text-stroke);
+    -webkit-text-stroke: 2px var(--color-ez-border);
+  }
+
+  /* Brand-aligned card hover effect */
+  .ez-card {
+    border: 1px solid var(--color-ez-border);
+    border-radius: 12px;
+    background-color: var(--color-ez-surface);
+    transition: transform 0.2s ease, border-color 0.2s ease;
+  }
+  .ez-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-ez-border-hover);
+  }
+
+  /* Fade-up entrance animation (matches landing site) */
+  .fade-up {
+    animation: fade-up 0.7s ease both;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
 .logo-primary {
-  fill: var(--color-logo-primary);
+  fill: var(--color-ez-accent);
 }
 
 .logo-stroke {
-  fill: var(--color-logo-stroke);
-  stroke: var(--color-logo-stroke);
+  fill: var(--color-ez-bg);
+  stroke: var(--color-ez-bg);
   stroke-width: 1;
 }

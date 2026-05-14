@@ -32,6 +32,16 @@ dist-ssr
 recording_*
 .crush/
 
+# Local-build debugging artifacts (Ezequielito fork)
+# vendor/ + .cargo/config.toml were generated to bypass a Windows-local
+# cargo lock issue. GitHub Actions builds fresh, doesn't need them.
+src-tauri/vendor/
+src-tauri/.cargo/
+src-tauri/build-temp/
+src-tauri/cargo-check-*.log
+src-tauri/cargo-vendor-config.toml
+build-temp/
+
 # Playwright
 playwright-report/
 test-results/
