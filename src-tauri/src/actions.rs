@@ -51,6 +51,11 @@ struct TranscribeAction {
     /// When true, the transcription is matched against `voice_commands`
     /// and used to launch an app via `app_launcher` instead of being pasted.
     voice_command: bool,
+    /// Phase 5: When set, overrides `post_process_selected_prompt_id` for
+    /// this action only. Lets each transcribe-mode binding (casual /
+    /// formal / code) target a specific LLM prompt regardless of the
+    /// globally selected one.
+    prompt_id_override: Option<&'static str>,
 }
 
 /// Apply snippet substitutions to a transcription. Case-insensitive
@@ -91,7 +96,11 @@ fn build_system_prompt(prompt_template: &str) -> String {
     prompt_template.replace("${output}", "").trim().to_string()
 }
 
-async fn post_process_transcription(settings: &AppSettings, transcription: &str) -> Option<String> {
+async fn post_process_transcription(
+    settings: &AppSettings,
+    transcription: &str,
+    prompt_id_override: Option<&str>,
+) -> Option<String> {
     let provider = match settings.active_post_process_provider().cloned() {
         Some(provider) => provider,
         None => {
@@ -114,8 +123,13 @@ async fn post_process_transcription(settings: &AppSettings, transcription: &str)
         return None;
     }
 
-    let selected_prompt_id = match &settings.post_process_selected_prompt_id {
-        Some(id) => id.clone(),
+    // Phase 5: if a per-action prompt override is provided (casual/formal/code),
+    // it takes precedence over the globally selected prompt.
+    let selected_prompt_id = match prompt_id_override
+        .map(|s| s.to_string())
+        .or_else(|| settings.post_process_selected_prompt_id.clone())
+    {
+        Some(id) => id,
         None => {
             debug!("Post-processing skipped because no prompt is selected");
             return None;
@@ -378,6 +392,7 @@ pub(crate) async fn process_transcription_output(
     app: &AppHandle,
     transcription: &str,
     post_process: bool,
+    prompt_id_override: Option<&str>,
 ) -> ProcessedTranscription {
     let settings = get_settings(app);
     let mut final_text = transcription.to_string();
@@ -389,11 +404,17 @@ pub(crate) async fn process_transcription_output(
     }
 
     if post_process {
-        if let Some(processed_text) = post_process_transcription(&settings, &final_text).await {
+        if let Some(processed_text) =
+            post_process_transcription(&settings, &final_text, prompt_id_override).await
+        {
             post_processed_text = Some(processed_text.clone());
             final_text = processed_text;
 
-            if let Some(prompt_id) = &settings.post_process_selected_prompt_id {
+            // Resolve effective prompt id (override > global selection) for history record
+            let effective_prompt_id = prompt_id_override
+                .map(|s| s.to_string())
+                .or_else(|| settings.post_process_selected_prompt_id.clone());
+            if let Some(prompt_id) = effective_prompt_id.as_ref() {
                 if let Some(prompt) = settings
                     .post_process_prompts
                     .iter()
@@ -488,6 +509,9 @@ impl ShortcutAction for TranscribeAction {
         if recording_error.is_none() {
             // Dynamically register the cancel shortcut in a separate task to avoid deadlock
             shortcut::register_cancel_shortcut(app);
+            // Phase 6: dynamically register the hands-free toggle (Space)
+            // so it only hijacks Space while recording is active.
+            shortcut::register_hands_free_shortcut(app);
         } else {
             // Starting failed (for example due to blocked microphone permissions).
             // Revert UI state so we don't stay stuck in the recording overlay.
@@ -520,6 +544,8 @@ impl ShortcutAction for TranscribeAction {
     fn stop(&self, app: &AppHandle, binding_id: &str, _shortcut_str: &str) {
         // Unregister the cancel shortcut when transcription stops
         shortcut::unregister_cancel_shortcut(app);
+        // Phase 6: also unregister hands-free toggle (Space frees up).
+        shortcut::unregister_hands_free_shortcut(app);
 
         let stop_time = Instant::now();
         debug!("TranscribeAction::stop called for binding: {}", binding_id);
@@ -541,6 +567,7 @@ impl ShortcutAction for TranscribeAction {
         let binding_id = binding_id.to_string(); // Clone binding_id for the async task
         let post_process = self.post_process;
         let voice_command = self.voice_command;
+        let prompt_id_override = self.prompt_id_override;
 
         tauri::async_runtime::spawn(async move {
             let _guard = FinishGuard(ah.clone());
@@ -611,9 +638,13 @@ impl ShortcutAction for TranscribeAction {
                             if post_process {
                                 show_processing_overlay(&ah);
                             }
-                            let processed =
-                                process_transcription_output(&ah, &transcription, post_process)
-                                    .await;
+                            let processed = process_transcription_output(
+                                &ah,
+                                &transcription,
+                                post_process,
+                                prompt_id_override,
+                            )
+                            .await;
 
                             // Save to history if WAV was saved
                             if wav_saved {
@@ -723,6 +754,26 @@ impl ShortcutAction for CancelAction {
     }
 }
 
+// Phase 6: Hands-free Toggle Action
+// Fires on Space tap mid-recording. Delegates the decision (lock the
+// recording vs. stop it) to TranscriptionCoordinator, which owns the
+// hands_free_locked state.
+struct HandsFreeToggleAction;
+
+impl ShortcutAction for HandsFreeToggleAction {
+    fn start(&self, app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
+        if let Some(coordinator) = app.try_state::<TranscriptionCoordinator>() {
+            coordinator.toggle_hands_free();
+        } else {
+            warn!("Hands-free toggle fired but coordinator not initialized");
+        }
+    }
+
+    fn stop(&self, _app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
+        // No-op — toggle fires on press only.
+    }
+}
+
 // Test Action
 struct TestAction;
 
@@ -754,6 +805,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
         Arc::new(TranscribeAction {
             post_process: false,
             voice_command: false,
+            prompt_id_override: None,
         }) as Arc<dyn ShortcutAction>,
     );
     map.insert(
@@ -761,6 +813,32 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
         Arc::new(TranscribeAction {
             post_process: true,
             voice_command: false,
+            prompt_id_override: None,
+        }) as Arc<dyn ShortcutAction>,
+    );
+    // Phase 5: three transcribe modes, each forcing a specific LLM prompt
+    map.insert(
+        "transcribe_casual".to_string(),
+        Arc::new(TranscribeAction {
+            post_process: true,
+            voice_command: false,
+            prompt_id_override: Some("ez_casual"),
+        }) as Arc<dyn ShortcutAction>,
+    );
+    map.insert(
+        "transcribe_formal".to_string(),
+        Arc::new(TranscribeAction {
+            post_process: true,
+            voice_command: false,
+            prompt_id_override: Some("ez_formal"),
+        }) as Arc<dyn ShortcutAction>,
+    );
+    map.insert(
+        "transcribe_code".to_string(),
+        Arc::new(TranscribeAction {
+            post_process: true,
+            voice_command: false,
+            prompt_id_override: Some("ez_code"),
         }) as Arc<dyn ShortcutAction>,
     );
     map.insert(
@@ -768,7 +846,13 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
         Arc::new(TranscribeAction {
             post_process: false,
             voice_command: true,
+            prompt_id_override: None,
         }) as Arc<dyn ShortcutAction>,
+    );
+    // Phase 6: hands-free toggle (Space tap during recording)
+    map.insert(
+        "hands_free_toggle".to_string(),
+        Arc::new(HandsFreeToggleAction) as Arc<dyn ShortcutAction>,
     );
     map.insert(
         "cancel".to_string(),

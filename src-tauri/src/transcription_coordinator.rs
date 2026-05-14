@@ -5,7 +5,7 @@ use std::sync::mpsc::{self, Sender};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 const DEBOUNCE: Duration = Duration::from_millis(30);
 
@@ -21,6 +21,9 @@ enum Command {
         recording_was_active: bool,
     },
     ProcessingFinished,
+    /// Phase 6: Space tapped mid-recording. First tap = lock the recording
+    /// (skip the next PTT release); second tap = stop the recording.
+    ToggleHandsFree,
 }
 
 /// Pipeline lifecycle, owned exclusively by the coordinator thread.
@@ -38,11 +41,20 @@ pub struct TranscriptionCoordinator {
 }
 
 pub fn is_transcribe_binding(id: &str) -> bool {
-    // `voice_command` is treated as a transcribe binding because it follows
-    // the same record→transcribe pipeline; the difference is that the
-    // resulting text triggers an app launcher instead of paste (see
-    // TranscribeAction::stop in actions.rs).
-    id == "transcribe" || id == "transcribe_with_post_process" || id == "voice_command"
+    // Phase 5: casual / formal / code are full transcribe bindings, just
+    // with a forced prompt id.
+    // Phase 7: voice_command shares the record→transcribe pipeline; the
+    // difference is that the resulting text triggers an app launcher
+    // instead of paste (see TranscribeAction::stop in actions.rs).
+    matches!(
+        id,
+        "transcribe"
+            | "transcribe_with_post_process"
+            | "transcribe_casual"
+            | "transcribe_formal"
+            | "transcribe_code"
+            | "voice_command"
+    )
 }
 
 impl TranscriptionCoordinator {
@@ -53,6 +65,10 @@ impl TranscriptionCoordinator {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 let mut stage = Stage::Idle;
                 let mut last_press: Option<Instant> = None;
+                // Phase 6: while true, PTT release events are ignored. Set by Space
+                // tap, cleared when recording actually stops (Stage transitions
+                // back to Idle via Cancel/ProcessingFinished or explicit stop).
+                let mut hands_free_locked = false;
 
                 while let Ok(cmd) = rx.recv() {
                     match cmd {
@@ -79,7 +95,14 @@ impl TranscriptionCoordinator {
                                 } else if !is_pressed
                                     && matches!(&stage, Stage::Recording(id) if id == &binding_id)
                                 {
-                                    stop(&app, &mut stage, &binding_id, &hotkey_string);
+                                    // Phase 6: if Space-lock is engaged, ignore the
+                                    // PTT release. Recording continues until Space
+                                    // is tapped again.
+                                    if hands_free_locked {
+                                        debug!("PTT release ignored — hands-free locked");
+                                    } else {
+                                        stop(&app, &mut stage, &binding_id, &hotkey_string);
+                                    }
                                 }
                             } else if is_pressed {
                                 match &stage {
@@ -103,10 +126,31 @@ impl TranscriptionCoordinator {
                                 && (recording_was_active || matches!(stage, Stage::Recording(_)))
                             {
                                 stage = Stage::Idle;
+                                hands_free_locked = false;
                             }
                         }
                         Command::ProcessingFinished => {
                             stage = Stage::Idle;
+                            hands_free_locked = false;
+                        }
+                        Command::ToggleHandsFree => {
+                            // First tap during recording: engage the lock so the next
+                            // PTT release is ignored. Second tap: clear the lock and
+                            // stop recording explicitly.
+                            if let Stage::Recording(active_binding) = &stage {
+                                if !hands_free_locked {
+                                    hands_free_locked = true;
+                                    debug!("Hands-free LOCKED for binding '{active_binding}'");
+                                    let _ = app.emit("hands-free-locked", true);
+                                } else {
+                                    let active = active_binding.clone();
+                                    hands_free_locked = false;
+                                    let _ = app.emit("hands-free-locked", false);
+                                    stop(&app, &mut stage, &active, "space");
+                                }
+                            } else {
+                                debug!("ToggleHandsFree ignored — not recording");
+                            }
                         }
                     }
                 }
@@ -157,6 +201,14 @@ impl TranscriptionCoordinator {
 
     pub fn notify_processing_finished(&self) {
         if self.tx.send(Command::ProcessingFinished).is_err() {
+            warn!("Transcription coordinator channel closed");
+        }
+    }
+
+    /// Phase 6: tapped Space during recording. Coordinator decides whether
+    /// to lock the recording or stop it based on its internal flag.
+    pub fn toggle_hands_free(&self) {
+        if self.tx.send(Command::ToggleHandsFree).is_err() {
             warn!("Transcription coordinator channel closed");
         }
     }

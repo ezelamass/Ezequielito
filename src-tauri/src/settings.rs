@@ -389,6 +389,11 @@ pub struct AppSettings {
     /// `voice_command` hotkey binding fires.
     #[serde(default = "default_voice_commands")]
     pub voice_commands: HashMap<String, String>,
+    /// Phase 6: When true, tapping Space mid-recording locks the recording
+    /// in hands-free mode (user can release the main PTT hotkey, recording
+    /// continues until Space is tapped again). Default true.
+    #[serde(default = "default_hands_free_enabled")]
+    pub hands_free_enabled: bool,
     #[serde(default)]
     pub model_unload_timeout: ModelUnloadTimeout,
     #[serde(default = "default_word_correction_threshold")]
@@ -657,11 +662,30 @@ fn default_post_process_models() -> HashMap<String, String> {
 }
 
 fn default_post_process_prompts() -> Vec<LLMPrompt> {
-    vec![LLMPrompt {
-        id: "default_improve_transcriptions".to_string(),
-        name: "Improve Transcriptions".to_string(),
-        prompt: "Clean this transcript:\n1. Fix spelling, capitalization, and punctuation errors\n2. Convert number words to digits (twenty-five → 25, ten percent → 10%, five dollars → $5)\n3. Replace spoken punctuation with symbols (period → ., comma → ,, question mark → ?)\n4. Remove filler words (um, uh, like as filler)\n5. Keep the language in the original version (if it was french, keep it in french for example)\n\nPreserve exact meaning and word order. Do not paraphrase or reorder content.\n\nReturn only the cleaned transcript.\n\nTranscript:\n${output}".to_string(),
-    }]
+    vec![
+        LLMPrompt {
+            id: "default_improve_transcriptions".to_string(),
+            name: "Improve Transcriptions".to_string(),
+            prompt: "Clean this transcript:\n1. Fix spelling, capitalization, and punctuation errors\n2. Convert number words to digits (twenty-five → 25, ten percent → 10%, five dollars → $5)\n3. Replace spoken punctuation with symbols (period → ., comma → ,, question mark → ?)\n4. Remove filler words (um, uh, like as filler)\n5. Keep the language in the original version (if it was french, keep it in french for example)\n\nPreserve exact meaning and word order. Do not paraphrase or reorder content.\n\nReturn only the cleaned transcript.\n\nTranscript:\n${output}".to_string(),
+        },
+        // Ezequielito fork: 3 mode-specific prompts mapped to dedicated bindings
+        // (transcribe_casual / transcribe_formal / transcribe_code).
+        LLMPrompt {
+            id: "ez_casual".to_string(),
+            name: "Casual (Ezequielito)".to_string(),
+            prompt: "Limpia esta transcripción manteniendo un tono conversacional natural en español:\n1. Quita muletillas (eh, este, o sea, tipo, ¿viste?, you know)\n2. Arregla puntuación y mayúsculas\n3. Mantené las contracciones y modismos rioplatenses\n4. NO parafrasees — preservá el orden de las palabras y el significado exacto\n5. Devolvé solo el texto limpio, sin preámbulo\n\nTranscripción:\n${output}".to_string(),
+        },
+        LLMPrompt {
+            id: "ez_formal".to_string(),
+            name: "Formal (Ezequielito)".to_string(),
+            prompt: "Reescribe esta transcripción en tono profesional formal para email a cliente:\n1. Sin muletillas, sin contracciones (no uses 'pa', 'pal', 'tipo')\n2. Tuteo respetuoso (no 'vos' / 'che', usar 'usted' si el contexto lo pide o tuteo formal)\n3. Puntuación correcta, mayúsculas correctas\n4. Mantené el significado pero podés mejorar la fluidez\n5. Devolvé solo el texto limpio, sin preámbulo ni explicaciones\n\nTranscripción:\n${output}".to_string(),
+        },
+        LLMPrompt {
+            id: "ez_code".to_string(),
+            name: "Code (Ezequielito)".to_string(),
+            prompt: "Esta transcripción es para pegar en un IDE o terminal de código:\n1. NO uses comillas tipográficas — solo comillas rectas \" '\n2. NO uses guiones largos — solo guion normal -\n3. Sin puntos finales si no son parte del código\n4. Mantené nombres de variables/funciones tal cual los dijo el speaker\n5. Para snake_case, kebab-case, camelCase: respetá la convención que mencione\n6. Devolvé solo el texto, listo para pegar\n\nTranscripción:\n${output}".to_string(),
+        },
+    ]
 }
 
 fn default_whisper_gpu_device() -> i32 {
@@ -747,6 +771,10 @@ fn default_snippets() -> Vec<Snippet> {
     ]
 }
 
+fn default_hands_free_enabled() -> bool {
+    true
+}
+
 fn default_voice_commands() -> HashMap<String, String> {
     let mut map = HashMap::new();
     map.insert("claude code".to_string(), "claude://".to_string());
@@ -817,14 +845,11 @@ pub fn get_default_settings() -> AppSettings {
     // Voice-command binding (Ezequielito fork): hold this hotkey, say
     // "abrir Claude Code" or similar; the launcher fires `cmd /C start`
     // against the matching entry in `voice_commands`. No paste.
-    #[cfg(target_os = "windows")]
-    let default_voice_command_shortcut = "right ctrl";
-    #[cfg(target_os = "macos")]
-    let default_voice_command_shortcut = "right option";
-    #[cfg(target_os = "linux")]
-    let default_voice_command_shortcut = "right ctrl";
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    let default_voice_command_shortcut = "right ctrl";
+    //
+    // F12 default: function keys are the most reliable bare hotkeys on
+    // Windows. Modifier-only keys (right ctrl, right alt) are quirky and
+    // often fail to fire global shortcut events. User can rebind via UI.
+    let default_voice_command_shortcut = "f12";
 
     bindings.insert(
         "voice_command".to_string(),
@@ -835,6 +860,58 @@ pub fn get_default_settings() -> AppSettings {
                 .to_string(),
             default_binding: default_voice_command_shortcut.to_string(),
             current_binding: default_voice_command_shortcut.to_string(),
+        },
+    );
+
+    // Phase 5 (Ezequielito): three transcription modes that each route the
+    // recording through a different LLM prompt. Default bindings empty so
+    // they don't collide with existing user setups; user assigns via UI.
+    bindings.insert(
+        "transcribe_casual".to_string(),
+        ShortcutBinding {
+            id: "transcribe_casual".to_string(),
+            name: "Transcribe (Casual)".to_string(),
+            description: "Dictate with casual conversational cleanup (Spanish-aware, rioplatense)."
+                .to_string(),
+            default_binding: String::new(),
+            current_binding: String::new(),
+        },
+    );
+    bindings.insert(
+        "transcribe_formal".to_string(),
+        ShortcutBinding {
+            id: "transcribe_formal".to_string(),
+            name: "Transcribe (Formal)".to_string(),
+            description: "Dictate with formal client-email cleanup (no contractions, polished)."
+                .to_string(),
+            default_binding: String::new(),
+            current_binding: String::new(),
+        },
+    );
+    bindings.insert(
+        "transcribe_code".to_string(),
+        ShortcutBinding {
+            id: "transcribe_code".to_string(),
+            name: "Transcribe (Code)".to_string(),
+            description: "Dictate code-friendly text (no smart quotes, no auto-formatting)."
+                .to_string(),
+            default_binding: String::new(),
+            current_binding: String::new(),
+        },
+    );
+
+    // Phase 6 (Ezequielito): hands-free toggle. Bound to Space. NOT
+    // registered globally — only registered dynamically while a recording
+    // is active (see shortcut::register_hands_free_shortcut, mirrors
+    // cancel pattern). First tap locks; second tap stops the recording.
+    bindings.insert(
+        "hands_free_toggle".to_string(),
+        ShortcutBinding {
+            id: "hands_free_toggle".to_string(),
+            name: "Hands-free toggle".to_string(),
+            description: "Tap Space mid-recording to lock; tap again to stop. Wispr-style.".to_string(),
+            default_binding: "space".to_string(),
+            current_binding: "space".to_string(),
         },
     );
 
@@ -860,6 +937,7 @@ pub fn get_default_settings() -> AppSettings {
         custom_words: Vec::new(),
         snippets: default_snippets(),
         voice_commands: default_voice_commands(),
+        hands_free_enabled: default_hands_free_enabled(),
         model_unload_timeout: ModelUnloadTimeout::default(),
         word_correction_threshold: default_word_correction_threshold(),
         history_limit: default_history_limit(),

@@ -74,6 +74,30 @@ pub fn unregister_cancel_shortcut(app: &AppHandle) {
     }
 }
 
+/// Phase 6: register the hands-free toggle shortcut (Space). Called when
+/// recording starts; mirrors the cancel pattern so Space is only globally
+/// hijacked while a dictation is actively in progress.
+pub fn register_hands_free_shortcut(app: &AppHandle) {
+    let settings = get_settings(app);
+    if !settings.hands_free_enabled {
+        return;
+    }
+    match settings.keyboard_implementation {
+        KeyboardImplementation::Tauri => tauri_impl::register_hands_free_shortcut(app),
+        KeyboardImplementation::HandyKeys => handy_keys::register_hands_free_shortcut(app),
+    }
+}
+
+/// Phase 6: unregister the hands-free toggle shortcut (Space). Called when
+/// recording stops.
+pub fn unregister_hands_free_shortcut(app: &AppHandle) {
+    let settings = get_settings(app);
+    match settings.keyboard_implementation {
+        KeyboardImplementation::Tauri => tauri_impl::unregister_hands_free_shortcut(app),
+        KeyboardImplementation::HandyKeys => handy_keys::unregister_hands_free_shortcut(app),
+    }
+}
+
 /// Register a shortcut using the appropriate implementation
 pub fn register_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<(), String> {
     let settings = get_settings(app);

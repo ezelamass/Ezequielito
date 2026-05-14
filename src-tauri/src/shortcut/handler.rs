@@ -61,6 +61,17 @@ pub fn handle_shortcut_event(
         return;
     }
 
+    // Phase 6: Hands-free toggle (Space). Only fires while recording and on
+    // press. The action delegates to the coordinator which decides whether
+    // to engage the lock or stop the recording.
+    if binding_id == "hands_free_toggle" {
+        let audio_manager = app.state::<Arc<AudioRecordingManager>>();
+        if audio_manager.is_recording() && is_pressed {
+            action.start(app, binding_id, hotkey_string);
+        }
+        return;
+    }
+
     // Remaining bindings (e.g. "test") use simple start/stop on press/release.
     if is_pressed {
         action.start(app, binding_id, hotkey_string);

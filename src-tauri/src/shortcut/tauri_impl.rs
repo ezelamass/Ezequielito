@@ -196,3 +196,51 @@ pub fn unregister_cancel_shortcut(app: &AppHandle) {
         });
     }
 }
+
+/// Phase 6: register the hands-free toggle (Space) — only during recording
+pub fn register_hands_free_shortcut(app: &AppHandle) {
+    #[cfg(target_os = "linux")]
+    {
+        let _ = app;
+        return;
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        let app_clone = app.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Some(binding) = get_settings(&app_clone)
+                .bindings
+                .get("hands_free_toggle")
+                .cloned()
+            {
+                if let Err(e) = register_shortcut(&app_clone, binding) {
+                    error!("Failed to register hands-free shortcut: {}", e);
+                }
+            }
+        });
+    }
+}
+
+/// Phase 6: unregister the hands-free toggle (Space)
+pub fn unregister_hands_free_shortcut(app: &AppHandle) {
+    #[cfg(target_os = "linux")]
+    {
+        let _ = app;
+        return;
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        let app_clone = app.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Some(binding) = get_settings(&app_clone)
+                .bindings
+                .get("hands_free_toggle")
+                .cloned()
+            {
+                let _ = unregister_shortcut(&app_clone, binding);
+            }
+        });
+    }
+}

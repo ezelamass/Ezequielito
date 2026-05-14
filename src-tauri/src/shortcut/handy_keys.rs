@@ -502,6 +502,58 @@ pub fn unregister_cancel_shortcut(app: &AppHandle) {
     }
 }
 
+/// Phase 6: register the hands-free toggle (Space) — only during recording
+pub fn register_hands_free_shortcut(app: &AppHandle) {
+    #[cfg(target_os = "linux")]
+    {
+        let _ = app;
+        return;
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        let app_clone = app.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Some(binding) = get_settings(&app_clone)
+                .bindings
+                .get("hands_free_toggle")
+                .cloned()
+            {
+                if let Some(state) = app_clone.try_state::<HandyKeysState>() {
+                    if let Err(e) = state.register(&binding) {
+                        error!("Failed to register hands-free shortcut: {}", e);
+                    }
+                }
+            }
+        });
+    }
+}
+
+/// Phase 6: unregister the hands-free toggle (Space)
+pub fn unregister_hands_free_shortcut(app: &AppHandle) {
+    #[cfg(target_os = "linux")]
+    {
+        let _ = app;
+        return;
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        let app_clone = app.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Some(binding) = get_settings(&app_clone)
+                .bindings
+                .get("hands_free_toggle")
+                .cloned()
+            {
+                if let Some(state) = app_clone.try_state::<HandyKeysState>() {
+                    let _ = state.unregister(&binding);
+                }
+            }
+        });
+    }
+}
+
 /// Register a shortcut
 pub fn register_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<(), String> {
     let state = app
