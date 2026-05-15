@@ -698,6 +698,14 @@ fn default_post_process_prompts() -> Vec<LLMPrompt> {
             name: "Code (Ezequielito)".to_string(),
             prompt: "Esta transcripción es para pegar en un IDE o terminal de código:\n1. NO uses comillas tipográficas — solo comillas rectas \" '\n2. NO uses guiones largos — solo guion normal -\n3. Sin puntos finales si no son parte del código\n4. Mantené nombres de variables/funciones tal cual los dijo el speaker\n5. Para snake_case, kebab-case, camelCase: respetá la convención que mencione\n6. Devolvé solo el texto, listo para pegar\n\nTranscripción:\n${output}".to_string(),
         },
+        // Phase 15 (Bundle 3): very casual prompt for Style → casual chats
+        // (WhatsApp, Telegram, etc.). Drops capitalization + punctuation for
+        // a closer-to-spoken vibe.
+        LLMPrompt {
+            id: "ez_very_casual".to_string(),
+            name: "Very casual (Ezequielito)".to_string(),
+            prompt: "Esta transcripción es para un chat re informal (WhatsApp, Discord):\n1. Quita muletillas\n2. Todo en minúscula, sin puntos finales\n3. Comas y signos de pregunta solo si son necesarios para entender\n4. Permitido el voseo, modismos y contracciones rioplatenses\n5. NO parafrasees — solo limpia\n6. Devolvé solo el texto limpio, sin preámbulo\n\nTranscripción:\n${output}".to_string(),
+        },
     ]
 }
 
@@ -711,6 +719,22 @@ fn default_typing_tool() -> TypingTool {
 
 fn ensure_post_process_defaults(settings: &mut AppSettings) -> bool {
     let mut changed = false;
+
+    // Phase 15 (Bundle 3): make sure Ezequielito prompts exist in the user's
+    // post_process_prompts list. Defaults only run on first install; this
+    // backfills new prompts for upgraders.
+    let default_prompts = default_post_process_prompts();
+    for default_prompt in &default_prompts {
+        if !settings
+            .post_process_prompts
+            .iter()
+            .any(|p| p.id == default_prompt.id)
+        {
+            settings.post_process_prompts.push(default_prompt.clone());
+            changed = true;
+        }
+    }
+
     for provider in default_post_process_providers() {
         // Use match to do a single lookup - either sync existing or add new
         match settings
@@ -987,6 +1011,40 @@ pub fn get_default_settings() -> AppSettings {
             current_binding: String::new(),
         },
     );
+
+    // Phase 15 (Bundle 3): Transforms — pre-bound LLM transforms that
+    // operate on the clipboard. User selects text in any app, copies,
+    // presses the transform hotkey → LLM rewrites and pastes. Three
+    // built-in slots (Polish, Prompt Engineer, Summarize); user assigns
+    // their preferred keys via Settings → General → Ezequielito shortcuts.
+    for (id, name, description) in [
+        (
+            "transform_polish",
+            "Transform: Polish",
+            "Read clipboard, polish for clarity and concision, paste replacement.",
+        ),
+        (
+            "transform_prompt_engineer",
+            "Transform: Prompt Engineer",
+            "Read clipboard, rewrite as a clean LLM prompt, paste replacement.",
+        ),
+        (
+            "transform_summarize",
+            "Transform: Summarize",
+            "Read clipboard, summarize concisely (3-5 sentences), paste replacement.",
+        ),
+    ] {
+        bindings.insert(
+            id.to_string(),
+            ShortcutBinding {
+                id: id.to_string(),
+                name: name.to_string(),
+                description: description.to_string(),
+                default_binding: String::new(),
+                current_binding: String::new(),
+            },
+        );
+    }
 
     // Phase 6 (Ezequielito): hands-free toggle. Bound to Space. NOT
     // registered globally — only registered dynamically while a recording

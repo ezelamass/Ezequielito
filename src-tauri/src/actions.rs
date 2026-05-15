@@ -919,6 +919,122 @@ impl ShortcutAction for CancelAction {
     }
 }
 
+// Phase 15 (Bundle 3): Transform Action — pre-bound LLM transform applied
+// to the clipboard. Pattern: user copies text → presses transform hotkey →
+// LLM rewrites with this transform's prompt → response pastes (replacing
+// the selection if it's still active).
+struct TransformAction {
+    name: &'static str,
+    system_prompt: &'static str,
+}
+
+impl ShortcutAction for TransformAction {
+    fn start(&self, app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
+        let ah = app.clone();
+        let name = self.name;
+        let system_prompt = self.system_prompt;
+
+        // Capture clipboard synchronously before spawning so the user's
+        // selection state is preserved.
+        use tauri_plugin_clipboard_manager::ClipboardExt;
+        let selection = match app.clipboard().read_text() {
+            Ok(text) if !text.trim().is_empty() => text,
+            Ok(_) => {
+                warn!("Transform '{}': clipboard is empty — nothing to do", name);
+                return;
+            }
+            Err(e) => {
+                warn!("Transform '{}': failed to read clipboard: {}", name, e);
+                return;
+            }
+        };
+
+        debug!(
+            "Transform '{}' invoked on {} chars of clipboard",
+            name,
+            selection.len()
+        );
+        change_tray_icon(app, TrayIconState::Transcribing);
+
+        tauri::async_runtime::spawn(async move {
+            let settings = get_settings(&ah);
+            let provider = match settings.active_post_process_provider().cloned() {
+                Some(p) => p,
+                None => {
+                    warn!("Transform '{}': no post-process provider configured", name);
+                    change_tray_icon(&ah, TrayIconState::Idle);
+                    return;
+                }
+            };
+            let model = settings
+                .post_process_models
+                .get(&provider.id)
+                .cloned()
+                .unwrap_or_default();
+            if model.trim().is_empty() {
+                warn!("Transform '{}': no model configured for provider", name);
+                change_tray_icon(&ah, TrayIconState::Idle);
+                return;
+            }
+            let api_key = settings
+                .post_process_api_keys
+                .get(&provider.id)
+                .cloned()
+                .unwrap_or_default();
+
+            let (reasoning_effort, reasoning) = match provider.id.as_str() {
+                "custom" => (Some("none".to_string()), None),
+                "openrouter" => (
+                    None,
+                    Some(crate::llm_client::ReasoningConfig {
+                        effort: Some("none".to_string()),
+                        exclude: Some(true),
+                    }),
+                ),
+                _ => (None, None),
+            };
+
+            let result = crate::llm_client::send_chat_completion_with_schema(
+                &provider,
+                api_key,
+                &model,
+                selection,
+                Some(system_prompt.to_string()),
+                None,
+                reasoning_effort,
+                reasoning,
+            )
+            .await;
+
+            match result {
+                Ok(Some(new_text)) => {
+                    let trimmed = new_text.trim().to_string();
+                    let ah_clone = ah.clone();
+                    let _ = ah.run_on_main_thread(move || {
+                        match utils::paste(trimmed, ah_clone.clone()) {
+                            Ok(()) => debug!("Transform '{}': pasted result", name),
+                            Err(e) => error!("Transform '{}' paste failed: {}", name, e),
+                        }
+                        change_tray_icon(&ah_clone, TrayIconState::Idle);
+                    });
+                }
+                Ok(None) => {
+                    warn!("Transform '{}': LLM returned empty", name);
+                    change_tray_icon(&ah, TrayIconState::Idle);
+                }
+                Err(e) => {
+                    error!("Transform '{}' LLM call failed: {}", name, e);
+                    change_tray_icon(&ah, TrayIconState::Idle);
+                }
+            }
+        });
+    }
+
+    fn stop(&self, _app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
+        // No-op — fire-on-press only.
+    }
+}
+
 // Phase 6: Hands-free Toggle Action
 // Fires on Space tap mid-recording. Delegates the decision (lock the
 // recording vs. stop it) to TranscriptionCoordinator, which owns the
@@ -1051,6 +1167,29 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             prompt_id_override: None,
             edit_mode: true,
             auto_context: false,
+        }) as Arc<dyn ShortcutAction>,
+    );
+    // Phase 15 (Bundle 3): Transforms — three pre-bound LLM transforms
+    // on the clipboard.
+    map.insert(
+        "transform_polish".to_string(),
+        Arc::new(TransformAction {
+            name: "Polish",
+            system_prompt: "You are a writing assistant. Rewrite the user's text to improve clarity, conciseness, and grammar while preserving the original meaning, voice, and language. Return ONLY the rewritten text, with no preamble, quotes, or markdown.",
+        }) as Arc<dyn ShortcutAction>,
+    );
+    map.insert(
+        "transform_prompt_engineer".to_string(),
+        Arc::new(TransformAction {
+            name: "Prompt Engineer",
+            system_prompt: "You are a prompt engineer. Rewrite the user's text as a well-structured LLM prompt: clear role, explicit task, constraints, expected output format. Keep the user's original intent. Return ONLY the new prompt, no preamble or commentary.",
+        }) as Arc<dyn ShortcutAction>,
+    );
+    map.insert(
+        "transform_summarize".to_string(),
+        Arc::new(TransformAction {
+            name: "Summarize",
+            system_prompt: "Summarize the user's text in 3-5 concise sentences. Keep the original language. Preserve the key facts and the speaker's tone. Return ONLY the summary, no preamble, no bullet points unless the original used them.",
         }) as Arc<dyn ShortcutAction>,
     );
     map.insert(

@@ -40,6 +40,9 @@ export const GeneralSettings: React.FC = () => {
         <ShortcutInput shortcutId="transcribe_code" grouped={true} />
         <ShortcutInput shortcutId="transcribe_edit" grouped={true} />
         <ShortcutInput shortcutId="voice_command" grouped={true} />
+        <ShortcutInput shortcutId="transform_polish" grouped={true} />
+        <ShortcutInput shortcutId="transform_prompt_engineer" grouped={true} />
+        <ShortcutInput shortcutId="transform_summarize" grouped={true} />
         {handsFreeEnabled && (
           <ShortcutInput shortcutId="hands_free_toggle" grouped={true} />
         )}
