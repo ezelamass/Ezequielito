@@ -7,6 +7,7 @@ import { Snippets } from "../Snippets";
 import { VoiceCommands } from "../VoiceCommands";
 import { DictionarySync } from "../DictionarySync";
 import { AppPromptMapping } from "../AppPromptMapping";
+import { HandsFreeToggle } from "../HandsFreeToggle";
 import { SettingsGroup } from "../../ui/SettingsGroup";
 import { StartHidden } from "../StartHidden";
 import { AutostartToggle } from "../AutostartToggle";
@@ -55,6 +56,7 @@ export const AdvancedSettings: React.FC = () => {
       </SettingsGroup>
 
       <SettingsGroup title="Ezequielito">
+        <HandsFreeToggle descriptionMode="tooltip" grouped />
         <VoiceCommands descriptionMode="tooltip" grouped />
         <AppPromptMapping descriptionMode="tooltip" grouped />
         <DictionarySync descriptionMode="tooltip" grouped />

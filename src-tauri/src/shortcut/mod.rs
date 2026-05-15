@@ -749,6 +749,18 @@ pub fn set_dictionary_sync_path(app: AppHandle, path: String) -> Result<(), Stri
     Ok(())
 }
 
+/// Phase 6 follow-up: flip the hands-free enable flag. When true,
+/// `register_hands_free_shortcut` will register the bare-Space binding
+/// dynamically during recording (subject to the conflict guard).
+#[tauri::command]
+#[specta::specta]
+pub fn change_hands_free_enabled_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let mut current = settings::get_settings(&app);
+    current.hands_free_enabled = enabled;
+    settings::write_settings(&app, current);
+    Ok(())
+}
+
 /// Phase 11 (rescue): update the app→prompt mapping used by the
 /// `transcribe_auto` binding. Map keys are lowercase exe names without
 /// the `.exe` suffix; values are LLMPrompt ids.

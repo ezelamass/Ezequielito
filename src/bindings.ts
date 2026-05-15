@@ -296,6 +296,14 @@ async updateAppPromptMap(map: { [key in string]: string }) : Promise<Result<null
     else return { status: "error", error: e  as any };
 }
 },
+async changeHandsFreeEnabledSetting(enabled: boolean) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_hands_free_enabled_setting", { enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async setDictionarySyncPath(path: string) : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("set_dictionary_sync_path", { path }) };

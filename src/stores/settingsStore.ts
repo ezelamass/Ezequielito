@@ -122,6 +122,8 @@ const settingUpdaters: {
     commands.updateVoiceCommands(value as { [key: string]: string }),
   app_prompt_map: (value) =>
     commands.updateAppPromptMap(value as { [key: string]: string }),
+  hands_free_enabled: (value) =>
+    commands.changeHandsFreeEnabledSetting(value as boolean),
   word_correction_threshold: (value) =>
     commands.changeWordCorrectionThresholdSetting(value as number),
   paste_delay_ms: (value) =>

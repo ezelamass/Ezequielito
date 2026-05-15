@@ -363,6 +363,7 @@ pub fn run(cli_args: CliArgs) {
             shortcut::update_snippets,
             shortcut::update_voice_commands,
             shortcut::update_app_prompt_map,
+            shortcut::change_hands_free_enabled_setting,
             shortcut::set_dictionary_sync_path,
             shortcut::sync_dictionary_now,
             shortcut::suspend_binding,
