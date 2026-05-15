@@ -9,6 +9,14 @@
     "cancel": "Cancelar"
   },
   "sidebar": {
+    "home": "Inicio",
+    "insights": "Insights",
+    "dictionary": "Diccionario",
+    "snippets": "Snippets",
+    "style": "Estilo",
+    "transforms": "Transforms",
+    "scratchpad": "Scratchpad",
+    "settings": "Configuración",
     "general": "General",
     "models": "Modelos",
     "advanced": "Avanzado",
