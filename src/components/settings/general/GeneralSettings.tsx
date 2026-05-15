@@ -16,6 +16,7 @@ export const GeneralSettings: React.FC = () => {
   const { t } = useTranslation();
   const { audioFeedbackEnabled, getSetting } = useSettings();
   const pushToTalk = getSetting("push_to_talk");
+  const handsFreeEnabled = getSetting("hands_free_enabled") ?? false;
   const isLinux = type() === "linux";
   return (
     <div className="max-w-3xl w-full mx-auto space-y-6">
@@ -27,6 +28,23 @@ export const GeneralSettings: React.FC = () => {
           <ShortcutInput shortcutId="cancel" grouped={true} />
         )}
       </SettingsGroup>
+
+      {/* Ezequielito fork — all the new binding hotkeys, surfaced here so
+          the user can rebind them. Some have empty defaults — assign a
+          combo to enable. */}
+      <SettingsGroup title="Ezequielito shortcuts">
+        <ShortcutInput shortcutId="transcribe_with_post_process" grouped={true} />
+        <ShortcutInput shortcutId="transcribe_auto" grouped={true} />
+        <ShortcutInput shortcutId="transcribe_casual" grouped={true} />
+        <ShortcutInput shortcutId="transcribe_formal" grouped={true} />
+        <ShortcutInput shortcutId="transcribe_code" grouped={true} />
+        <ShortcutInput shortcutId="transcribe_edit" grouped={true} />
+        <ShortcutInput shortcutId="voice_command" grouped={true} />
+        {handsFreeEnabled && (
+          <ShortcutInput shortcutId="hands_free_toggle" grouped={true} />
+        )}
+      </SettingsGroup>
+
       <ModelSettingsCard />
       <SettingsGroup title={t("settings.sound.title")}>
         <MicrophoneSelector descriptionMode="tooltip" grouped={true} />
