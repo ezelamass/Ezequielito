@@ -111,9 +111,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { t } = useTranslation();
 
-  const availableSections = Object.entries(SECTIONS_CONFIG)
-    .filter(([_, config]) => config.enabled({}))
-    .map(([id, config]) => ({ id: id as SidebarSection, ...config }));
+  // All Phase 13 sections are always enabled; per-section gating happens
+  // *inside* SettingsContainer for the nested sub-nav (Post Process / Debug).
+  const availableSections = Object.entries(SECTIONS_CONFIG).map(
+    ([id, config]) => ({ id: id as SidebarSection, ...config }),
+  );
 
   return (
     <div className="flex flex-col w-48 h-full border-e border-mid-gray/20 items-center px-2">
