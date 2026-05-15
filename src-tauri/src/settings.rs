@@ -1012,6 +1012,22 @@ pub fn get_default_settings() -> AppSettings {
         },
     );
 
+    // Phase 16 (Bundle 4): Scratchpad — dictate directly into Ezequielito's
+    // internal text buffer instead of pasting into the active app. Useful
+    // for long drafts. The Scratchpad view in the frontend listens for the
+    // `scratchpad-append` event emitted when this binding fires.
+    bindings.insert(
+        "transcribe_to_scratchpad".to_string(),
+        ShortcutBinding {
+            id: "transcribe_to_scratchpad".to_string(),
+            name: "Transcribe to Scratchpad".to_string(),
+            description: "Dictate into the Scratchpad view (not the active app)."
+                .to_string(),
+            default_binding: String::new(),
+            current_binding: String::new(),
+        },
+    );
+
     // Phase 15 (Bundle 3): Transforms — pre-bound LLM transforms that
     // operate on the clipboard. User selects text in any app, copies,
     // presses the transform hotkey → LLM rewrites and pastes. Three

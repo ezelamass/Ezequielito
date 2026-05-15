@@ -65,6 +65,10 @@ struct TranscribeAction {
     /// `settings.app_prompt_map` at runtime. Overrides any static
     /// `prompt_id_override` set on this action.
     auto_context: bool,
+    /// Phase 16 (Bundle 4): Scratchpad mode. When true, the transcription
+    /// is NOT pasted into the active app — instead, a `scratchpad-append`
+    /// event is emitted so the in-app Scratchpad view appends the text.
+    scratchpad: bool,
 }
 
 /// Apply snippet substitutions to a transcription. Case-insensitive
@@ -656,6 +660,7 @@ impl ShortcutAction for TranscribeAction {
         let prompt_id_override = self.prompt_id_override;
         let edit_mode = self.edit_mode;
         let auto_context = self.auto_context;
+        let scratchpad = self.scratchpad;
 
         // Phase 11 (rescue): resolve auto-mode prompt id synchronously here
         // (before the spawn) so we capture the foreground app while the
@@ -832,6 +837,12 @@ impl ShortcutAction for TranscribeAction {
                             }
 
                             if final_text.is_empty() {
+                                utils::hide_recording_overlay(&ah);
+                                change_tray_icon(&ah, TrayIconState::Idle);
+                            } else if scratchpad {
+                                // Phase 16: send to in-app Scratchpad view
+                                // instead of pasting into the active app.
+                                let _ = ah.emit("scratchpad-append", final_text.clone());
                                 utils::hide_recording_overlay(&ah);
                                 change_tray_icon(&ah, TrayIconState::Idle);
                             } else if voice_command {
@@ -1089,6 +1100,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             prompt_id_override: None,
             edit_mode: false,
             auto_context: false,
+            scratchpad: false,
         }) as Arc<dyn ShortcutAction>,
     );
     map.insert(
@@ -1099,6 +1111,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             prompt_id_override: None,
             edit_mode: false,
             auto_context: false,
+            scratchpad: false,
         }) as Arc<dyn ShortcutAction>,
     );
     // Phase 5: three transcribe modes, each forcing a specific LLM prompt
@@ -1110,6 +1123,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             prompt_id_override: Some("ez_casual"),
             edit_mode: false,
             auto_context: false,
+            scratchpad: false,
         }) as Arc<dyn ShortcutAction>,
     );
     map.insert(
@@ -1120,6 +1134,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             prompt_id_override: Some("ez_formal"),
             edit_mode: false,
             auto_context: false,
+            scratchpad: false,
         }) as Arc<dyn ShortcutAction>,
     );
     map.insert(
@@ -1130,6 +1145,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             prompt_id_override: Some("ez_code"),
             edit_mode: false,
             auto_context: false,
+            scratchpad: false,
         }) as Arc<dyn ShortcutAction>,
     );
     // Phase 11 (rescue): context-aware auto-mode
@@ -1141,6 +1157,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             prompt_id_override: None,
             edit_mode: false,
             auto_context: true,
+            scratchpad: false,
         }) as Arc<dyn ShortcutAction>,
     );
     map.insert(
@@ -1151,6 +1168,20 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             prompt_id_override: None,
             edit_mode: false,
             auto_context: false,
+            scratchpad: false,
+        }) as Arc<dyn ShortcutAction>,
+    );
+    // Phase 16 (Bundle 4): Scratchpad — emit `scratchpad-append` event
+    // instead of pasting into the active app.
+    map.insert(
+        "transcribe_to_scratchpad".to_string(),
+        Arc::new(TranscribeAction {
+            post_process: false,
+            voice_command: false,
+            prompt_id_override: None,
+            edit_mode: false,
+            auto_context: false,
+            scratchpad: true,
         }) as Arc<dyn ShortcutAction>,
     );
     // Phase 6: hands-free toggle (Space tap during recording)
@@ -1167,6 +1198,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
             prompt_id_override: None,
             edit_mode: true,
             auto_context: false,
+            scratchpad: false,
         }) as Arc<dyn ShortcutAction>,
     );
     // Phase 15 (Bundle 3): Transforms — three pre-bound LLM transforms

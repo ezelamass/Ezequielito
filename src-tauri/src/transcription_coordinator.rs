@@ -58,6 +58,7 @@ pub fn is_transcribe_binding(id: &str) -> bool {
             | "transcribe_code"
             | "transcribe_auto"
             | "transcribe_edit"
+            | "transcribe_to_scratchpad"
             | "voice_command"
     )
 }
