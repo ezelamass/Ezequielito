@@ -374,6 +374,10 @@ pub struct AppSettings {
     pub selected_language: String,
     #[serde(default = "default_overlay_position")]
     pub overlay_position: OverlayPosition,
+    /// Tell the cleanup model which app (and window) the text is going to,
+    /// so it can match the tone and spell names that appear there.
+    #[serde(default = "default_true")]
+    pub context_awareness: bool,
     /// Keep a small pill on screen while idle; clicking it starts dictation.
     #[serde(default = "default_overlay_idle_pill")]
     pub overlay_idle_pill: bool,
@@ -497,6 +501,10 @@ fn default_update_checks_enabled() -> bool {
 
 fn default_selected_language() -> String {
     "auto".to_string()
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_overlay_idle_pill() -> bool {
@@ -834,11 +842,23 @@ fn default_app_prompt_map() -> HashMap<String, String> {
         "windowsterminal",
         "powershell",
         "wt",
+        // macOS (app display names, lowercased)
+        "visual studio code",
+        "xcode",
+        "terminal",
+        "iterm2",
     ] {
         m.insert(app.to_string(), "ez_code".to_string());
     }
     // Mail / formal → ez_formal
-    for app in ["outlook", "olk", "thunderbird", "msoutlook"] {
+    for app in [
+        "outlook",
+        "olk",
+        "thunderbird",
+        "msoutlook",
+        "mail",
+        "microsoft outlook",
+    ] {
         m.insert(app.to_string(), "ez_formal".to_string());
     }
     // Chats / casual → ez_casual (also the implicit fallback for unknown apps)
@@ -849,6 +869,7 @@ fn default_app_prompt_map() -> HashMap<String, String> {
         "discord",
         "messenger",
         "skype",
+        "messages",
     ] {
         m.insert(app.to_string(), "ez_casual".to_string());
     }
@@ -989,7 +1010,7 @@ pub fn get_default_settings() -> AppSettings {
             id: "transcribe_edit".to_string(),
             name: "Edit Mode".to_string(),
             description:
-                "Copy text first, then hold + dictate instruction. LLM rewrites and pastes."
+"Select text, then hold and dictate an instruction: it is rewritten in place. With nothing selected, it writes what you ask for."
                     .to_string(),
             default_binding: String::new(),
             current_binding: String::new(),
@@ -1093,6 +1114,7 @@ pub fn get_default_settings() -> AppSettings {
         translate_to_english: false,
         selected_language: "auto".to_string(),
         overlay_position: default_overlay_position(),
+        context_awareness: true,
         overlay_idle_pill: default_overlay_idle_pill(),
         debug_mode: false,
         log_level: default_log_level(),

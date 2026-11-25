@@ -95,9 +95,14 @@ pub async fn retry_history_entry_transcription(
 
     // Phase 5: retry from history doesn't have a specific prompt override —
     // it re-uses whatever was active at the time (or the global selection).
-    let processed =
-        process_transcription_output(&app, &transcription, entry.post_process_requested, None)
-            .await;
+    let processed = process_transcription_output(
+        &app,
+        &transcription,
+        entry.post_process_requested,
+        None,
+        None,
+    )
+    .await;
     history_manager
         .update_transcription(
             id,

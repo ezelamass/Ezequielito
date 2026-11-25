@@ -3,6 +3,7 @@ mod active_window;
 mod app_launcher;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 mod apple_intelligence;
+mod assist;
 mod audio_feedback;
 pub mod audio_toolkit;
 pub mod cli;
@@ -14,6 +15,7 @@ mod llm_client;
 mod managers;
 mod overlay;
 pub mod portable;
+mod selection;
 mod settings;
 mod shortcut;
 mod signal_handle;
@@ -21,6 +23,8 @@ mod transcription_coordinator;
 mod tray;
 mod tray_i18n;
 mod utils;
+#[cfg(target_os = "windows")]
+mod win_keys;
 
 pub use cli::CliArgs;
 #[cfg(debug_assertions)]
@@ -338,6 +342,7 @@ pub fn run(cli_args: CliArgs) {
             shortcut::change_selected_language_setting,
             shortcut::change_overlay_position_setting,
             shortcut::change_overlay_idle_pill_setting,
+            shortcut::change_context_awareness_setting,
             shortcut::change_debug_mode_setting,
             shortcut::change_word_correction_threshold_setting,
             shortcut::change_extra_recording_buffer_setting,

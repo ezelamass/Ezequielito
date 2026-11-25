@@ -76,6 +76,9 @@ pub enum OverlayError {
     TranscriptionFailed,
     PasteFailed,
     CommandNotFound,
+    NoSelection,
+    AiNotConfigured,
+    AiFailed,
     Generic,
 }
 
@@ -88,6 +91,9 @@ impl OverlayError {
             OverlayError::TranscriptionFailed => "transcription_failed",
             OverlayError::PasteFailed => "paste_failed",
             OverlayError::CommandNotFound => "command_not_found",
+            OverlayError::NoSelection => "no_selection",
+            OverlayError::AiNotConfigured => "ai_not_configured",
+            OverlayError::AiFailed => "ai_failed",
             OverlayError::Generic => "generic",
         }
     }

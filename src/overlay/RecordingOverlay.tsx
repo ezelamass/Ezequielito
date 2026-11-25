@@ -42,6 +42,9 @@ const ERROR_KEYS: Record<string, string> = {
   transcription_failed: "overlay.errors.transcriptionFailed",
   paste_failed: "overlay.errors.pasteFailed",
   command_not_found: "overlay.errors.commandNotFound",
+  no_selection: "overlay.errors.noSelection",
+  ai_not_configured: "overlay.errors.aiNotConfigured",
+  ai_failed: "overlay.errors.aiFailed",
   generic: "overlay.errors.generic",
 };
 

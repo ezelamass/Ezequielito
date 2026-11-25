@@ -1,12 +1,16 @@
+use crate::active_window::ActiveApp;
 use crate::app_launcher;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 use crate::apple_intelligence;
+use crate::assist::{self, AssistError};
 use crate::audio_feedback::{play_feedback_sound, play_feedback_sound_blocking, SoundType};
+use crate::audio_toolkit::constants::WHISPER_SAMPLE_RATE;
 use crate::audio_toolkit::{is_microphone_access_denied, is_no_input_device_error};
 use crate::managers::audio::AudioRecordingManager;
-use crate::managers::history::HistoryManager;
+use crate::managers::history::{DictationMeta, HistoryManager};
 use crate::managers::transcription::TranscriptionManager;
 use crate::overlay::OverlayError;
+use crate::selection::{self, Selection};
 use crate::settings::{get_settings, AppSettings, Snippet, APPLE_INTELLIGENCE_PROVIDER_ID};
 use crate::shortcut;
 use crate::tray::{change_tray_icon, TrayIconState};
@@ -116,6 +120,7 @@ async fn post_process_transcription(
     settings: &AppSettings,
     transcription: &str,
     prompt_id_override: Option<&str>,
+    context: Option<&ActiveApp>,
 ) -> Option<String> {
     let provider = match settings.active_post_process_provider().cloned() {
         Some(provider) => provider,
@@ -171,6 +176,13 @@ async fn post_process_transcription(
         debug!("Post-processing skipped because the selected prompt is empty");
         return None;
     }
+
+    // Tell the model where the text is going. It goes in front of the
+    // prompt so `${output}` stays last in legacy mode.
+    let prompt = match context.filter(|_| settings.context_awareness) {
+        Some(app) => format!("{}\n\n{}", app.context_note(), prompt),
+        None => prompt,
+    };
 
     debug!(
         "Starting LLM post-processing with provider '{}' (model: {})",
@@ -404,91 +416,12 @@ pub(crate) struct ProcessedTranscription {
     pub post_process_prompt: Option<String>,
 }
 
-/// Phase 8 (Edit Mode): Given a clipboard selection and a spoken instruction,
-/// send both to the configured post-process LLM and return the rewritten text.
-/// Falls back to `None` (caller pastes the raw instruction or skips) if
-/// post-processing isn't configured.
-async fn process_edit_mode_request(
-    settings: &AppSettings,
-    selection: &str,
-    instruction: &str,
-) -> Option<String> {
-    let provider = settings.active_post_process_provider().cloned()?;
-    let model = settings
-        .post_process_models
-        .get(&provider.id)
-        .cloned()
-        .unwrap_or_default();
-    if model.trim().is_empty() {
-        debug!(
-            "Edit Mode skipped — provider '{}' has no model",
-            provider.id
-        );
-        return None;
-    }
-    let api_key = settings
-        .post_process_api_keys
-        .get(&provider.id)
-        .cloned()
-        .unwrap_or_default();
-
-    // Disable reasoning to match the post-process behaviour for these providers.
-    let (reasoning_effort, reasoning) = match provider.id.as_str() {
-        "custom" => (Some("none".to_string()), None),
-        "openrouter" => (
-            None,
-            Some(crate::llm_client::ReasoningConfig {
-                effort: Some("none".to_string()),
-                exclude: Some(true),
-            }),
-        ),
-        _ => (None, None),
-    };
-
-    let system_prompt = "Sos un editor de texto. El usuario te pasa un texto seleccionado y una instrucción. Aplicá la instrucción al texto. Devolvé SOLO el texto nuevo, sin preámbulo, sin explicaciones, sin comillas, sin markdown. Si la instrucción es ambigua, hacé tu mejor interpretación. Mantené el idioma del texto original.".to_string();
-    let user_content = format!(
-        "Texto seleccionado:\n<<<\n{}\n>>>\n\nInstrucción:\n{}",
-        selection.trim(),
-        instruction.trim()
-    );
-
-    debug!(
-        "Edit Mode LLM call: provider '{}' model '{}' (selection {} chars, instruction {} chars)",
-        provider.id,
-        model,
-        selection.len(),
-        instruction.len()
-    );
-
-    match crate::llm_client::send_chat_completion_with_schema(
-        &provider,
-        api_key,
-        &model,
-        user_content,
-        Some(system_prompt),
-        None,
-        reasoning_effort,
-        reasoning,
-    )
-    .await
-    {
-        Ok(Some(text)) => Some(text.trim().to_string()),
-        Ok(None) => {
-            warn!("Edit Mode: LLM returned empty content");
-            None
-        }
-        Err(e) => {
-            error!("Edit Mode LLM call failed: {}", e);
-            None
-        }
-    }
-}
-
 pub(crate) async fn process_transcription_output(
     app: &AppHandle,
     transcription: &str,
     post_process: bool,
     prompt_id_override: Option<&str>,
+    context: Option<&ActiveApp>,
 ) -> ProcessedTranscription {
     let settings = get_settings(app);
     let mut final_text = transcription.to_string();
@@ -501,7 +434,7 @@ pub(crate) async fn process_transcription_output(
 
     if post_process {
         if let Some(processed_text) =
-            post_process_transcription(&settings, &final_text, prompt_id_override).await
+            post_process_transcription(&settings, &final_text, prompt_id_override, context).await
         {
             post_processed_text = Some(processed_text.clone());
             final_text = processed_text;
@@ -668,42 +601,28 @@ impl ShortcutAction for TranscribeAction {
         let auto_context = self.auto_context;
         let scratchpad = self.scratchpad;
 
+        // The app the text is going to. Read here, synchronously, while the
+        // user's target window is still in front: it picks the style in
+        // auto mode, gives the cleanup model its context, tells selection
+        // capture whether copying is safe, and is stored for Insights.
+        let target_app = crate::active_window::active_app();
+
         // Phase 11 (rescue): resolve auto-mode prompt id synchronously here
         // (before the spawn) so we capture the foreground app while the
         // user's target window is still focused. Stored as String to keep
         // ownership through the .await boundary.
         let auto_resolved_prompt_id: Option<String> = if auto_context {
-            let proc = crate::active_window::active_process_name();
             let settings = get_settings(app);
-            let resolved = proc
-                .as_deref()
-                .and_then(|name| settings.app_prompt_map.get(name).cloned())
+            let resolved = target_app
+                .as_ref()
+                .and_then(|app| settings.app_prompt_map.get(&app.process).cloned())
                 .unwrap_or_else(|| "ez_casual".to_string());
             debug!(
-                "Auto-mode: foreground process={:?} → prompt='{}'",
-                proc, resolved
+                "Auto-mode: foreground app={:?} → prompt='{}'",
+                target_app.as_ref().map(|app| app.process.as_str()),
+                resolved
             );
             Some(resolved)
-        } else {
-            None
-        };
-
-        // Phase 8: snapshot the clipboard right at hotkey release. The user
-        // is expected to have Ctrl+C'd their target text before pressing the
-        // Edit Mode hotkey, so this captures the staged selection.
-        let edit_selection: Option<String> = if edit_mode {
-            use tauri_plugin_clipboard_manager::ClipboardExt;
-            match app.clipboard().read_text() {
-                Ok(text) if !text.trim().is_empty() => Some(text),
-                Ok(_) => {
-                    warn!("Edit Mode: clipboard is empty — copy your target text first");
-                    None
-                }
-                Err(e) => {
-                    warn!("Edit Mode: failed to read clipboard: {}", e);
-                    None
-                }
-            }
         } else {
             None
         };
@@ -716,7 +635,9 @@ impl ShortcutAction for TranscribeAction {
             );
 
             let stop_recording_time = Instant::now();
-            if let Some(samples) = rm.stop_recording(&binding_id) {
+            let stopped = rm.stop_recording(&binding_id);
+
+            if let Some(samples) = stopped {
                 debug!(
                     "Recording stopped and samples retrieved in {:?}, sample count: {}",
                     stop_recording_time.elapsed(),
@@ -728,8 +649,28 @@ impl ShortcutAction for TranscribeAction {
                     utils::show_error_overlay(&ah, OverlayError::NoSpeech);
                     change_tray_icon(&ah, TrayIconState::Idle);
                 } else {
+                    // Edit Mode: read what the user has selected in the
+                    // foreground app (see `selection.rs`). It starts once
+                    // the microphone is closed and there is audio to act
+                    // on, and runs while that audio is transcribed. `None`
+                    // means nothing is selected and the instruction becomes
+                    // a writing request.
+                    let mut selection_task = if edit_mode {
+                        let ah = ah.clone();
+                        let target_app = target_app.clone();
+                        Some(tauri::async_runtime::spawn_blocking(move || {
+                            selected_text(&ah, target_app.as_ref())
+                        }))
+                    } else {
+                        None
+                    };
+
                     // Save WAV concurrently with transcription
                     let sample_count = samples.len();
+                    let dictation_meta = DictationMeta {
+                        duration_ms: Some(samples_to_ms(sample_count)),
+                        app_name: target_app.as_ref().map(|app| app.process.clone()),
+                    };
                     let file_name = format!("handy-{}.wav", chrono::Utc::now().timestamp());
                     let wav_path = hm.recordings_dir().join(&file_name);
                     let wav_path_for_verify = wav_path.clone();
@@ -789,6 +730,7 @@ impl ShortcutAction for TranscribeAction {
                                 &transcription,
                                 post_process,
                                 effective_prompt_id,
+                                target_app.as_ref(),
                             )
                             .await;
 
@@ -800,6 +742,7 @@ impl ShortcutAction for TranscribeAction {
                                     post_process,
                                     processed.post_processed_text.clone(),
                                     processed.post_process_prompt.clone(),
+                                    dictation_meta.clone(),
                                 ) {
                                     error!("Failed to save history entry: {}", err);
                                 }
@@ -811,34 +754,38 @@ impl ShortcutAction for TranscribeAction {
                             let snippets = get_settings(&ah).snippets;
                             let mut final_text = apply_snippets(&processed.final_text, &snippets);
 
-                            // Phase 8: if Edit Mode, treat `final_text` as an
-                            // instruction and rewrite the captured selection
-                            // via the LLM. Result replaces final_text and falls
-                            // through to the standard paste flow.
-                            if edit_mode {
-                                if let Some(selection) = edit_selection.as_ref() {
-                                    let settings = get_settings(&ah);
-                                    if let Some(rewritten) =
-                                        process_edit_mode_request(&settings, selection, &final_text)
-                                            .await
-                                    {
-                                        debug!(
-                                            "Edit Mode rewrite: {} → {} chars",
-                                            selection.len(),
-                                            rewritten.len()
-                                        );
-                                        final_text = rewritten;
-                                    } else {
-                                        warn!(
-                                            "Edit Mode: rewrite failed; pasting instruction as-is"
-                                        );
+                            // Edit Mode: `final_text` is the spoken instruction.
+                            // Apply it to the selection (or, with nothing
+                            // selected, write what it asks for) and paste the
+                            // result through the standard flow. On failure
+                            // nothing is pasted: pasting the instruction would
+                            // overwrite the user's selection with it.
+                            // Always collect the selection read, so the
+                            // clipboard is back in place before any paste.
+                            let edit_selection: Option<String> = match selection_task.take() {
+                                Some(task) => task.await.ok().flatten(),
+                                None => None,
+                            };
+                            let mut edit_error: Option<OverlayError> = None;
+                            if edit_mode && !final_text.trim().is_empty() {
+                                show_processing_overlay(&ah);
+                                let (system_prompt, user_content) = assist::build_edit_request(
+                                    edit_selection.as_deref(),
+                                    &final_text,
+                                );
+                                match assist::complete(&ah, system_prompt, user_content).await {
+                                    Ok(rewritten) => final_text = rewritten,
+                                    Err(e) => {
+                                        warn!("Edit Mode: {:?}", e);
+                                        edit_error = Some(overlay_error_for(&e));
                                     }
-                                } else {
-                                    warn!("Edit Mode: no selection captured; pasting instruction as-is");
                                 }
                             }
 
-                            if final_text.is_empty() {
+                            if let Some(edit_error) = edit_error {
+                                utils::show_error_overlay(&ah, edit_error);
+                                change_tray_icon(&ah, TrayIconState::Idle);
+                            } else if final_text.is_empty() {
                                 utils::show_error_overlay(&ah, OverlayError::NoSpeech);
                                 change_tray_icon(&ah, TrayIconState::Idle);
                             } else if scratchpad {
@@ -908,6 +855,7 @@ impl ShortcutAction for TranscribeAction {
                                     post_process,
                                     None,
                                     None,
+                                    dictation_meta.clone(),
                                 ) {
                                     error!("Failed to save failed history entry: {}", save_err);
                                 }
@@ -944,119 +892,125 @@ impl ShortcutAction for CancelAction {
     }
 }
 
-// Phase 15 (Bundle 3): Transform Action — pre-bound LLM transform applied
-// to the clipboard. Pattern: user copies text → presses transform hotkey →
-// LLM rewrites with this transform's prompt → response pastes (replacing
-// the selection if it's still active).
+/// Length in milliseconds of `sample_count` samples of recorded speech.
+fn samples_to_ms(sample_count: usize) -> i64 {
+    (sample_count as i64) * 1000 / i64::from(WHISPER_SAMPLE_RATE)
+}
+
+/// Text selected in the foreground app, or `None` when nothing is.
+///
+/// Where copy cannot be simulated safely (Wayland, a terminal) it falls back
+/// to what the user copied by hand, which is how this worked before.
+///
+/// Blocks for up to about a second; never call it from the main thread.
+fn selected_text(app: &AppHandle, target: Option<&ActiveApp>) -> Option<String> {
+    match selection::capture_selection(app, target) {
+        Selection::Text(text) => Some(text),
+        Selection::Empty => None,
+        Selection::Unsupported => {
+            use tauri_plugin_clipboard_manager::ClipboardExt;
+            app.clipboard()
+                .read_text()
+                .ok()
+                .filter(|text| !text.trim().is_empty())
+        }
+    }
+}
+
+/// The pill message for a failed model request.
+fn overlay_error_for(error: &AssistError) -> OverlayError {
+    match error {
+        AssistError::NotConfigured => OverlayError::AiNotConfigured,
+        AssistError::Empty | AssistError::Failed(_) => OverlayError::AiFailed,
+    }
+}
+
+// Transform Action — a pre-bound rewrite of the selected text. Pattern: user
+// selects text → presses and releases the transform hotkey → the model
+// rewrites it with this transform's prompt → the result is pasted over the
+// selection.
 struct TransformAction {
     name: &'static str,
     system_prompt: &'static str,
 }
 
 impl ShortcutAction for TransformAction {
-    fn start(&self, app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
-        let ah = app.clone();
-        let name = self.name;
-        let system_prompt = self.system_prompt;
-
-        // Capture clipboard synchronously before spawning so the user's
-        // selection state is preserved.
-        use tauri_plugin_clipboard_manager::ClipboardExt;
-        let selection = match app.clipboard().read_text() {
-            Ok(text) if !text.trim().is_empty() => text,
-            Ok(_) => {
-                warn!("Transform '{}': clipboard is empty — nothing to do", name);
-                return;
-            }
-            Err(e) => {
-                warn!("Transform '{}': failed to read clipboard: {}", name, e);
-                return;
-            }
-        };
-
-        debug!(
-            "Transform '{}' invoked on {} chars of clipboard",
-            name,
-            selection.len()
-        );
-        change_tray_icon(app, TrayIconState::Transcribing);
-
-        tauri::async_runtime::spawn(async move {
-            let settings = get_settings(&ah);
-            let provider = match settings.active_post_process_provider().cloned() {
-                Some(p) => p,
-                None => {
-                    warn!("Transform '{}': no post-process provider configured", name);
-                    change_tray_icon(&ah, TrayIconState::Idle);
-                    return;
-                }
-            };
-            let model = settings
-                .post_process_models
-                .get(&provider.id)
-                .cloned()
-                .unwrap_or_default();
-            if model.trim().is_empty() {
-                warn!("Transform '{}': no model configured for provider", name);
-                change_tray_icon(&ah, TrayIconState::Idle);
-                return;
-            }
-            let api_key = settings
-                .post_process_api_keys
-                .get(&provider.id)
-                .cloned()
-                .unwrap_or_default();
-
-            let (reasoning_effort, reasoning) = match provider.id.as_str() {
-                "custom" => (Some("none".to_string()), None),
-                "openrouter" => (
-                    None,
-                    Some(crate::llm_client::ReasoningConfig {
-                        effort: Some("none".to_string()),
-                        exclude: Some(true),
-                    }),
-                ),
-                _ => (None, None),
-            };
-
-            let result = crate::llm_client::send_chat_completion_with_schema(
-                &provider,
-                api_key,
-                &model,
-                selection,
-                Some(system_prompt.to_string()),
-                None,
-                reasoning_effort,
-                reasoning,
-            )
-            .await;
-
-            match result {
-                Ok(Some(new_text)) => {
-                    let trimmed = new_text.trim().to_string();
-                    let ah_clone = ah.clone();
-                    let _ = ah.run_on_main_thread(move || {
-                        match utils::paste(trimmed, ah_clone.clone()) {
-                            Ok(()) => debug!("Transform '{}': pasted result", name),
-                            Err(e) => error!("Transform '{}' paste failed: {}", name, e),
-                        }
-                        change_tray_icon(&ah_clone, TrayIconState::Idle);
-                    });
-                }
-                Ok(None) => {
-                    warn!("Transform '{}': LLM returned empty", name);
-                    change_tray_icon(&ah, TrayIconState::Idle);
-                }
-                Err(e) => {
-                    error!("Transform '{}' LLM call failed: {}", name, e);
-                    change_tray_icon(&ah, TrayIconState::Idle);
-                }
-            }
-        });
+    fn start(&self, _app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
+        // Nothing on press: the work happens on release. The release event
+        // fires when the main key goes up, possibly with modifiers still
+        // held; `selection.rs` waits for those before simulating the copy.
     }
 
-    fn stop(&self, _app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
-        // No-op — fire-on-press only.
+    fn stop(&self, app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
+        let name = self.name;
+        let system_prompt = self.system_prompt;
+        let ah = app.clone();
+
+        // Reserving the pipeline and reading the selection both block, so
+        // they get their own thread rather than the shortcut handler's.
+        std::thread::spawn(move || {
+            // A Transform uses the clipboard, the paste and the pill, the
+            // same things a dictation uses: one at a time. The guard hands
+            // the pipeline back when this work ends, however it ends.
+            let Some(coordinator) = ah.try_state::<TranscriptionCoordinator>() else {
+                return;
+            };
+            if !coordinator.try_begin_external() {
+                debug!("Transform '{}' ignored: the pipeline is busy", name);
+                return;
+            }
+            let guard = FinishGuard(ah.clone());
+
+            let target_app = crate::active_window::active_app();
+            let Some(selection) = selected_text(&ah, target_app.as_ref()) else {
+                debug!("Transform '{}': nothing selected", name);
+                utils::show_error_overlay(&ah, OverlayError::NoSelection);
+                return;
+            };
+
+            debug!(
+                "Transform '{}' invoked on {} selected chars",
+                name,
+                selection.len()
+            );
+            change_tray_icon(&ah, TrayIconState::Transcribing);
+            show_processing_overlay(&ah);
+
+            tauri::async_runtime::spawn(async move {
+                match assist::complete(&ah, system_prompt, selection).await {
+                    Ok(new_text) => {
+                        let ah_clone = ah.clone();
+                        ah.run_on_main_thread(move || {
+                            // Released only after the paste (and its
+                            // clipboard restore) has actually run.
+                            let _guard = guard;
+                            match utils::paste(new_text, ah_clone.clone()) {
+                                Ok(()) => {
+                                    debug!("Transform '{}': pasted result", name);
+                                    utils::hide_recording_overlay(&ah_clone);
+                                }
+                                Err(e) => {
+                                    error!("Transform '{}' paste failed: {}", name, e);
+                                    utils::show_error_overlay(&ah_clone, OverlayError::PasteFailed);
+                                }
+                            }
+                            change_tray_icon(&ah_clone, TrayIconState::Idle);
+                        })
+                        .unwrap_or_else(|e| {
+                            error!("Transform '{}': main thread unavailable: {:?}", name, e);
+                            utils::hide_recording_overlay(&ah);
+                            change_tray_icon(&ah, TrayIconState::Idle);
+                        });
+                    }
+                    Err(e) => {
+                        warn!("Transform '{}': {:?}", name, e);
+                        utils::show_error_overlay(&ah, overlay_error_for(&e));
+                        change_tray_icon(&ah, TrayIconState::Idle);
+                        drop(guard);
+                    }
+                }
+            });
+        });
     }
 }
 
