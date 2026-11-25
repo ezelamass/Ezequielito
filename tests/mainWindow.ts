@@ -56,7 +56,7 @@ export async function openHome(page: Page, options: OpenOptions = {}) {
   await page.setViewportSize({ width: 1100, height: 760 });
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "Ezequielito" }),
+    page.getByRole("heading", { name: "Vento Voice" }),
   ).toBeVisible();
 }
 

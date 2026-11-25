@@ -26,7 +26,11 @@
     "about": "Om"
   },
   "onboarding": {
+    "title": "Dictate anywhere",
     "subtitle": "För att komma igång, välj en transkriptionsmodell",
+    "showOthers": "See {{count}} other models",
+    "showOthers_one": "See {{count}} other model",
+    "hideOthers": "Hide other models",
     "recommended": "Rekommenderat",
     "download": "Ladda ner",
     "downloading": "Laddar ner...",
@@ -108,7 +112,7 @@
     },
     "permissions": {
       "title": "Behörigheter krävs",
-      "description": "Handy behöver ett par behörigheter för att fungera korrekt.",
+      "description": "Vento Voice behöver ett par behörigheter för att fungera korrekt.",
       "microphone": {
         "title": "Mikrofonåtkomst",
         "description": "Krävs för att höra din röst för transkription."
@@ -166,7 +170,7 @@
     "general": {
       "title": "Allmänt",
       "shortcut": {
-        "title": "Handy-kortkommandon",
+        "title": "Vento Voice-kortkommandon",
         "description": "Konfigurera kortkommandon för att starta tal-till-text-inspelning",
         "loading": "Laddar kortkommandon...",
         "none": "Inga kortkommandon konfigurerade",
@@ -332,11 +336,11 @@
       },
       "autostart": {
         "label": "Starta vid uppstart",
-        "description": "Starta Handy automatiskt när du loggar in på din dator."
+        "description": "Starta Vento Voice automatiskt när du loggar in på din dator."
       },
       "showTrayIcon": {
         "label": "Visa ikon i systemfältet",
-        "description": "Visa Handy-ikonen i systemfältet."
+        "description": "Visa Vento Voice-ikonen i systemfältet."
       },
       "overlay": {
         "title": "Överlagringsposition",
@@ -513,7 +517,7 @@
       },
       "updateChecks": {
         "label": "Sök efter uppdateringar",
-        "description": "Sök automatiskt efter nya versioner av Handy"
+        "description": "Sök automatiskt efter nya versioner av Vento Voice"
       },
       "soundTheme": {
         "label": "Ljudtema",
@@ -581,28 +585,28 @@
       "title": "Om",
       "version": {
         "title": "Version",
-        "description": "Nuvarande version av Handy"
+        "description": "Nuvarande version av Vento Voice"
       },
       "appDataDirectory": {
         "title": "Mapp för appdata",
-        "description": "Plats där Handy lagrar sina data"
+        "description": "Plats där Vento Voice lagrar sina data"
       },
       "sourceCode": {
         "title": "Källkod",
         "description": "Visa källkod och bidra",
         "button": "Visa på GitHub"
       },
-      "supportDevelopment": {
-        "title": "Stöd utvecklingen",
-        "description": "Hjälp oss att fortsätta bygga Handy",
-        "button": "Donera"
-      },
       "acknowledgments": {
         "title": "Tack till",
         "whisper": {
           "title": "Whisper.cpp",
           "description": "Högpresterande inferens av OpenAI:s Whisper-modell för automatisk taligenkänning",
-          "details": "Handy använder Whisper.cpp för snabb, lokal tal-till-text-behandling. Tack till det fantastiska arbete som utförts av Georgi Gerganov med medarbetare."
+          "details": "Vento Voice använder Whisper.cpp för snabb, lokal tal-till-text-behandling. Tack till det fantastiska arbete som utförts av Georgi Gerganov med medarbetare."
+        },
+        "handy": {
+          "title": "Handy",
+          "description": "The open-source dictation app Vento Voice is built on",
+          "details": "Vento Voice started from Handy, by CJ Pais and contributors, released under the MIT licence. Recording, local transcription and much of what makes dictation reliable come from that work. Vento Voice is a separate product and is not affiliated with or endorsed by Handy."
         }
       }
     },
@@ -691,7 +695,7 @@
   },
   "accessibility": {
     "permissionsRequired": "Behörigheter för hjälpmedel krävs",
-    "permissionsDescription": "Handy behöver behörighet för hjälpmedel för att kunna skriva transkriberad text.",
+    "permissionsDescription": "Vento Voice behöver behörighet för hjälpmedel för att kunna skriva transkriberad text.",
     "openSettings": "Öppna systeminställningar",
     "dismiss": "Avvisa"
   },
@@ -714,7 +718,7 @@
   },
   "appLanguage": {
     "title": "Applikationsspråk",
-    "description": "Ändra språket i Handy-gränssnittet"
+    "description": "Ändra språket i Vento Voice-gränssnittet"
   },
   "overlay": {
     "transcribing": "Transkriberar...",
@@ -743,7 +747,7 @@
     }
   },
   "app": {
-    "name": "Ezequielito"
+    "name": "Vento Voice"
   },
   "views": {
     "home": {
@@ -839,7 +843,7 @@
         "shared": "Shared with team"
       },
       "promo": {
-        "title": "Ezequielito writes like <emphasis>you</emphasis>.",
+        "title": "Vento Voice writes like <emphasis>you</emphasis>.",
         "description": "Add proper names, your industry's jargon, client brands. Every dictation respects them and corrects them automatically, even if the model misheard them."
       },
       "suggestions": {
@@ -934,7 +938,7 @@
         }
       },
       "unassigned": "Unassigned",
-      "assignHint": "To assign hotkeys: Settings → General → “Ezequielito shortcuts” group."
+      "assignHint": "To assign hotkeys: Settings → General → “Vento Voice” group."
     },
     "scratchpad": {
       "description": "Free-form editor. Assign a hotkey to <binding>Transcribe to Scratchpad</binding> in Settings → General to dictate straight into it.",

@@ -1,29 +1,49 @@
 @import "tailwindcss";
 
 /*
- * Ezequielito brand identity — sourced from ezequiellamas-landing
- * Dark-mode only. Lime accent on pitch black, warm-beige text.
+ * Vento Voice uses Vento's palette: black + lime + Pistacho, dark only.
+ *
+ * - Lime ACTS: the main action and what is selected. One per screen.
+ * - Pistacho ACCOMPANIES: "ready" states, chips, friendly notices. Never
+ *   the main action.
+ * - No other brand colours. Errors and warnings use the state colours.
+ *
+ * The `--color-ez-*` names predate the move to Vento and are kept as the
+ * tokens the components already use.
  */
 @theme {
-  /* Brand color tokens (--ez-* and Tailwind --color-* aliases) */
-  --color-ez-bg: #0a0a0a;
+  --color-ez-bg: #0a0a0a; /* Negro */
   --color-ez-surface: #111111;
-  --color-ez-accent: #c8ff00; /* lime — recording indicator, active states, primary accent */
-  --color-ez-warm: #ff6b35; /* warm orange — hands-free locked, warnings */
-  --color-ez-blue: #4a9eff; /* tertiary — links, info */
-  --color-ez-text: #e8e4de; /* warm beige off-white */
-  --color-ez-text-muted: #8a8580; /* muted tan */
+  --color-ez-surface-2: #161616;
+  --color-ez-accent: #c8ff00; /* Lima */
+  --color-ez-accent-hi: #dcff4d; /* hover of a lime action */
+  --color-ez-accent-lo: #b5e600; /* pressed */
+  --color-ez-calm: #b6e59e; /* Pistacho */
+  --color-ez-moss: #142012; /* Musgo: soft green surface */
+  --color-ez-error: #ff7a7a;
+  --color-ez-warm: #f5b93a; /* warning */
+  --color-ez-blue: #4a9eff;
+  --color-ez-text: #e8e4de; /* Hueso */
+  --color-ez-text-muted: #b8b3ad;
+  --color-ez-text-dim: #8a8580;
   --color-ez-border: #1e1e1e;
   --color-ez-border-hover: #2a2a2a;
 
-  /* Backwards-compatible aliases for legacy Handy class names */
+  /* Semantic names (`text-accent`, `bg-calm`, `text-error`…). */
+  --color-accent: var(--color-ez-accent);
+  --color-calm: var(--color-ez-calm);
+  --color-moss: var(--color-ez-moss);
+  --color-error: var(--color-ez-error);
+  --color-warning: var(--color-ez-warm);
+
+  /* Aliases for the class names inherited from the upstream UI. */
   --color-text: var(--color-ez-text);
   --color-background: var(--color-ez-bg);
   --color-background-ui: var(--color-ez-surface);
   --color-logo-primary: var(--color-ez-accent);
   --color-logo-stroke: var(--color-ez-bg);
   --color-text-stroke: var(--color-ez-border);
-  --color-mid-gray: var(--color-ez-text-muted);
+  --color-mid-gray: var(--color-ez-text-dim);
 }
 
 :root {

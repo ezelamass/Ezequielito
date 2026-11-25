@@ -26,7 +26,11 @@
     "about": "Info"
   },
   "onboarding": {
+    "title": "Dictate anywhere",
     "subtitle": "Wähle ein Transkriptionsmodell, um loszulegen",
+    "showOthers": "See {{count}} other models",
+    "showOthers_one": "See {{count}} other model",
+    "hideOthers": "Hide other models",
     "recommended": "Empfohlen",
     "download": "Herunterladen",
     "downloading": "Wird heruntergeladen...",
@@ -108,7 +112,7 @@
     },
     "permissions": {
       "title": "Berechtigungen erforderlich",
-      "description": "Handy benötigt einige Berechtigungen, um richtig zu funktionieren.",
+      "description": "Vento Voice benötigt einige Berechtigungen, um richtig zu funktionieren.",
       "microphone": {
         "title": "Mikrofonzugriff",
         "description": "Erforderlich, um deine Stimme für die Transkription zu hören."
@@ -166,7 +170,7 @@
     "general": {
       "title": "Allgemein",
       "shortcut": {
-        "title": "Handy-Tastenkürzel",
+        "title": "Vento Voice-Tastenkürzel",
         "description": "Tastenkürzel für die Sprachaufnahme konfigurieren",
         "loading": "Tastenkürzel werden geladen...",
         "none": "Keine Tastenkürzel konfiguriert",
@@ -332,11 +336,11 @@
       },
       "autostart": {
         "label": "Beim Start ausführen",
-        "description": "Handy automatisch beim Anmelden starten."
+        "description": "Vento Voice automatisch beim Anmelden starten."
       },
       "showTrayIcon": {
         "label": "Taskleistensymbol anzeigen",
-        "description": "Das Handy-Symbol in der Taskleiste anzeigen."
+        "description": "Das Vento Voice-Symbol in der Taskleiste anzeigen."
       },
       "overlay": {
         "title": "Overlay-Position",
@@ -513,7 +517,7 @@
       },
       "updateChecks": {
         "label": "Nach Updates suchen",
-        "description": "Automatisch nach neuen Versionen von Handy suchen"
+        "description": "Automatisch nach neuen Versionen von Vento Voice suchen"
       },
       "soundTheme": {
         "label": "Sound-Thema",
@@ -581,28 +585,28 @@
       "title": "Info",
       "version": {
         "title": "Version",
-        "description": "Aktuelle Version von Handy"
+        "description": "Aktuelle Version von Vento Voice"
       },
       "appDataDirectory": {
         "title": "App-Datenverzeichnis",
-        "description": "Speicherort der Handy-Daten"
+        "description": "Speicherort der Vento Voice-Daten"
       },
       "sourceCode": {
         "title": "Quellcode",
         "description": "Quellcode ansehen und beitragen",
         "button": "Auf GitHub ansehen"
       },
-      "supportDevelopment": {
-        "title": "Entwicklung unterstützen",
-        "description": "Hilf uns, Handy weiterzuentwickeln",
-        "button": "Spenden"
-      },
       "acknowledgments": {
         "title": "Danksagungen",
         "whisper": {
           "title": "Whisper.cpp",
           "description": "Hochleistungs-Inferenz des Whisper-Spracherkennungsmodells von OpenAI",
-          "details": "Handy verwendet Whisper.cpp für schnelle, lokale Sprach-zu-Text-Verarbeitung. Dank an Georgi Gerganov und die Mitwirkenden für ihre großartige Arbeit."
+          "details": "Vento Voice verwendet Whisper.cpp für schnelle, lokale Sprach-zu-Text-Verarbeitung. Dank an Georgi Gerganov und die Mitwirkenden für ihre großartige Arbeit."
+        },
+        "handy": {
+          "title": "Handy",
+          "description": "The open-source dictation app Vento Voice is built on",
+          "details": "Vento Voice started from Handy, by CJ Pais and contributors, released under the MIT licence. Recording, local transcription and much of what makes dictation reliable come from that work. Vento Voice is a separate product and is not affiliated with or endorsed by Handy."
         }
       }
     },
@@ -691,7 +695,7 @@
   },
   "accessibility": {
     "permissionsRequired": "Bedienungshilfen-Berechtigungen erforderlich",
-    "permissionsDescription": "Handy benötigt Bedienungshilfen-Berechtigungen, um transkribierten Text einzugeben.",
+    "permissionsDescription": "Vento Voice benötigt Bedienungshilfen-Berechtigungen, um transkribierten Text einzugeben.",
     "openSettings": "Systemeinstellungen öffnen",
     "dismiss": "Schließen"
   },
@@ -714,7 +718,7 @@
   },
   "appLanguage": {
     "title": "Anwendungssprache",
-    "description": "Sprache der Handy-Oberfläche ändern"
+    "description": "Sprache der Vento Voice-Oberfläche ändern"
   },
   "overlay": {
     "transcribing": "Transkribiere...",
@@ -743,7 +747,7 @@
     }
   },
   "app": {
-    "name": "Ezequielito"
+    "name": "Vento Voice"
   },
   "views": {
     "home": {
@@ -839,7 +843,7 @@
         "shared": "Shared with team"
       },
       "promo": {
-        "title": "Ezequielito writes like <emphasis>you</emphasis>.",
+        "title": "Vento Voice writes like <emphasis>you</emphasis>.",
         "description": "Add proper names, your industry's jargon, client brands. Every dictation respects them and corrects them automatically, even if the model misheard them."
       },
       "suggestions": {
@@ -934,7 +938,7 @@
         }
       },
       "unassigned": "Unassigned",
-      "assignHint": "To assign hotkeys: Settings → General → “Ezequielito shortcuts” group."
+      "assignHint": "To assign hotkeys: Settings → General → “Vento Voice” group."
     },
     "scratchpad": {
       "description": "Free-form editor. Assign a hotkey to <binding>Transcribe to Scratchpad</binding> in Settings → General to dictate straight into it.",

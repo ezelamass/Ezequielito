@@ -26,7 +26,11 @@
     "about": "Giới thiệu"
   },
   "onboarding": {
+    "title": "Dictate anywhere",
     "subtitle": "Để bắt đầu, hãy chọn một mô hình chuyển đổi giọng nói",
+    "showOthers": "See {{count}} other models",
+    "showOthers_one": "See {{count}} other model",
+    "hideOthers": "Hide other models",
     "recommended": "Đề xuất",
     "download": "Tải xuống",
     "downloading": "Đang tải xuống...",
@@ -108,7 +112,7 @@
     },
     "permissions": {
       "title": "Cần cấp quyền",
-      "description": "Handy cần một số quyền để hoạt động bình thường.",
+      "description": "Vento Voice cần một số quyền để hoạt động bình thường.",
       "microphone": {
         "title": "Quyền truy cập Micrô",
         "description": "Cần thiết để nghe giọng nói của bạn để chuyển đổi."
@@ -166,7 +170,7 @@
     "general": {
       "title": "Chung",
       "shortcut": {
-        "title": "Phím tắt Handy",
+        "title": "Phím tắt Vento Voice",
         "description": "Cấu hình phím tắt để kích hoạt ghi âm chuyển đổi giọng nói thành văn bản",
         "loading": "Đang tải phím tắt...",
         "none": "Chưa cấu hình phím tắt",
@@ -332,11 +336,11 @@
       },
       "autostart": {
         "label": "Khởi động cùng hệ thống",
-        "description": "Tự động khởi động Handy khi bạn đăng nhập vào máy tính."
+        "description": "Tự động khởi động Vento Voice khi bạn đăng nhập vào máy tính."
       },
       "showTrayIcon": {
         "label": "Hiển thị biểu tượng khay",
-        "description": "Hiển thị biểu tượng Handy trong khay hệ thống."
+        "description": "Hiển thị biểu tượng Vento Voice trong khay hệ thống."
       },
       "overlay": {
         "title": "Vị trí lớp phủ",
@@ -513,7 +517,7 @@
       },
       "updateChecks": {
         "label": "Kiểm tra cập nhật",
-        "description": "Tự động kiểm tra phiên bản mới của Handy"
+        "description": "Tự động kiểm tra phiên bản mới của Vento Voice"
       },
       "soundTheme": {
         "label": "Chủ đề âm thanh",
@@ -581,28 +585,28 @@
       "title": "Giới thiệu",
       "version": {
         "title": "Phiên bản",
-        "description": "Phiên bản hiện tại của Handy"
+        "description": "Phiên bản hiện tại của Vento Voice"
       },
       "appDataDirectory": {
         "title": "Thư mục dữ liệu ứng dụng",
-        "description": "Vị trí Handy lưu trữ dữ liệu"
+        "description": "Vị trí Vento Voice lưu trữ dữ liệu"
       },
       "sourceCode": {
         "title": "Mã nguồn",
         "description": "Xem mã nguồn và đóng góp",
         "button": "Xem trên GitHub"
       },
-      "supportDevelopment": {
-        "title": "Hỗ trợ phát triển",
-        "description": "Giúp chúng tôi tiếp tục xây dựng Handy",
-        "button": "Quyên góp"
-      },
       "acknowledgments": {
         "title": "Lời cảm ơn",
         "whisper": {
           "title": "Whisper.cpp",
           "description": "Suy luận hiệu suất cao của mô hình nhận dạng giọng nói tự động Whisper của OpenAI",
-          "details": "Handy sử dụng Whisper.cpp để xử lý chuyển đổi giọng nói thành văn bản nhanh, cục bộ. Cảm ơn công việc tuyệt vời của Georgi Gerganov và các cộng tác viên."
+          "details": "Vento Voice sử dụng Whisper.cpp để xử lý chuyển đổi giọng nói thành văn bản nhanh, cục bộ. Cảm ơn công việc tuyệt vời của Georgi Gerganov và các cộng tác viên."
+        },
+        "handy": {
+          "title": "Handy",
+          "description": "The open-source dictation app Vento Voice is built on",
+          "details": "Vento Voice started from Handy, by CJ Pais and contributors, released under the MIT licence. Recording, local transcription and much of what makes dictation reliable come from that work. Vento Voice is a separate product and is not affiliated with or endorsed by Handy."
         }
       }
     },
@@ -691,7 +695,7 @@
   },
   "accessibility": {
     "permissionsRequired": "Cần quyền truy cập",
-    "permissionsDescription": "Handy cần quyền truy cập để gõ văn bản đã chuyển đổi.",
+    "permissionsDescription": "Vento Voice cần quyền truy cập để gõ văn bản đã chuyển đổi.",
     "openSettings": "Mở Cài đặt Hệ thống",
     "dismiss": "Bỏ qua"
   },
@@ -714,7 +718,7 @@
   },
   "appLanguage": {
     "title": "Ngôn ngữ ứng dụng",
-    "description": "Thay đổi ngôn ngữ giao diện của Handy"
+    "description": "Thay đổi ngôn ngữ giao diện của Vento Voice"
   },
   "overlay": {
     "transcribing": "Đang chuyển đổi...",
@@ -743,7 +747,7 @@
     }
   },
   "app": {
-    "name": "Ezequielito"
+    "name": "Vento Voice"
   },
   "views": {
     "home": {
@@ -839,7 +843,7 @@
         "shared": "Shared with team"
       },
       "promo": {
-        "title": "Ezequielito writes like <emphasis>you</emphasis>.",
+        "title": "Vento Voice writes like <emphasis>you</emphasis>.",
         "description": "Add proper names, your industry's jargon, client brands. Every dictation respects them and corrects them automatically, even if the model misheard them."
       },
       "suggestions": {
@@ -934,7 +938,7 @@
         }
       },
       "unassigned": "Unassigned",
-      "assignHint": "To assign hotkeys: Settings → General → “Ezequielito shortcuts” group."
+      "assignHint": "To assign hotkeys: Settings → General → “Vento Voice” group."
     },
     "scratchpad": {
       "description": "Free-form editor. Assign a hotkey to <binding>Transcribe to Scratchpad</binding> in Settings → General to dictate straight into it.",

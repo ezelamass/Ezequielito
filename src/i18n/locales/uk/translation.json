@@ -26,7 +26,11 @@
     "about": "Інфо"
   },
   "onboarding": {
+    "title": "Dictate anywhere",
     "subtitle": "Для початку оберіть модель транскрипції",
+    "showOthers": "See {{count}} other models",
+    "showOthers_one": "See {{count}} other model",
+    "hideOthers": "Hide other models",
     "recommended": "Рекомендовано",
     "download": "Завантажити",
     "downloading": "Завантаження...",
@@ -108,7 +112,7 @@
     },
     "permissions": {
       "title": "Потрібні дозволи",
-      "description": "Handy потребує деяких дозволів для коректної роботи.",
+      "description": "Vento Voice потребує деяких дозволів для коректної роботи.",
       "microphone": {
         "title": "Доступ до мікрофона",
         "description": "Потрібен для прослуховування вашого голосу для транскрипції."
@@ -332,11 +336,11 @@
       },
       "autostart": {
         "label": "Запуск при старті системи",
-        "description": "Автоматично запускати Handy при вході в систему"
+        "description": "Автоматично запускати Vento Voice при вході в систему"
       },
       "showTrayIcon": {
         "label": "Показати значок у треї",
-        "description": "Відображати значок Handy у системному треї."
+        "description": "Відображати значок Vento Voice у системному треї."
       },
       "overlay": {
         "title": "Позиція оверлею",
@@ -513,7 +517,7 @@
       },
       "updateChecks": {
         "label": "Перевірка оновлень",
-        "description": "Автоматично перевіряти наявність нових версій Handy"
+        "description": "Автоматично перевіряти наявність нових версій Vento Voice"
       },
       "soundTheme": {
         "label": "Звукова тема",
@@ -581,28 +585,28 @@
       "title": "Інфо",
       "version": {
         "title": "Версія",
-        "description": "Поточна версія Handy"
+        "description": "Поточна версія Vento Voice"
       },
       "appDataDirectory": {
         "title": "Папка даних програми",
-        "description": "Розташування даних Handy"
+        "description": "Розташування даних Vento Voice"
       },
       "sourceCode": {
         "title": "Вихідний код",
         "description": "Переглянути вихідний код та зробити внесок",
         "button": "Переглянути на GitHub"
       },
-      "supportDevelopment": {
-        "title": "Підтримати розробку",
-        "description": "Допоможіть нам продовжувати розвивати Handy",
-        "button": "Підтримати"
-      },
       "acknowledgments": {
         "title": "Подяки",
         "whisper": {
           "title": "Whisper.cpp",
           "description": "Високопродуктивний інференс моделі автоматичного розпізнавання мовлення Whisper від OpenAI",
-          "details": "Handy використовує Whisper.cpp для швидкої локальної обробки мовлення в текст. Дякуємо за чудову роботу Георгію Герганову та контриб'юторам."
+          "details": "Vento Voice використовує Whisper.cpp для швидкої локальної обробки мовлення в текст. Дякуємо за чудову роботу Георгію Герганову та контриб'юторам."
+        },
+        "handy": {
+          "title": "Handy",
+          "description": "The open-source dictation app Vento Voice is built on",
+          "details": "Vento Voice started from Handy, by CJ Pais and contributors, released under the MIT licence. Recording, local transcription and much of what makes dictation reliable come from that work. Vento Voice is a separate product and is not affiliated with or endorsed by Handy."
         }
       }
     },
@@ -691,7 +695,7 @@
   },
   "accessibility": {
     "permissionsRequired": "Потрібні права доступу",
-    "permissionsDescription": "Handy потребує дозволи доступності для введення транскрибованого тексту.",
+    "permissionsDescription": "Vento Voice потребує дозволи доступності для введення транскрибованого тексту.",
     "openSettings": "Відкрити Системні налаштування",
     "dismiss": "Закрити"
   },
@@ -714,7 +718,7 @@
   },
   "appLanguage": {
     "title": "Мова інтерфейсу",
-    "description": "Змінити мову інтерфейсу Handy"
+    "description": "Змінити мову інтерфейсу Vento Voice"
   },
   "overlay": {
     "transcribing": "Обробка...",
@@ -743,7 +747,7 @@
     }
   },
   "app": {
-    "name": "Ezequielito"
+    "name": "Vento Voice"
   },
   "views": {
     "home": {
@@ -839,7 +843,7 @@
         "shared": "Shared with team"
       },
       "promo": {
-        "title": "Ezequielito writes like <emphasis>you</emphasis>.",
+        "title": "Vento Voice writes like <emphasis>you</emphasis>.",
         "description": "Add proper names, your industry's jargon, client brands. Every dictation respects them and corrects them automatically, even if the model misheard them."
       },
       "suggestions": {
@@ -934,7 +938,7 @@
         }
       },
       "unassigned": "Unassigned",
-      "assignHint": "To assign hotkeys: Settings → General → “Ezequielito shortcuts” group."
+      "assignHint": "To assign hotkeys: Settings → General → “Vento Voice” group."
     },
     "scratchpad": {
       "description": "Free-form editor. Assign a hotkey to <binding>Transcribe to Scratchpad</binding> in Settings → General to dictate straight into it.",

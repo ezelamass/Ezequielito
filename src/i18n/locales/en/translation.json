@@ -26,7 +26,11 @@
     "about": "About"
   },
   "onboarding": {
-    "subtitle": "To get started, choose a transcription model",
+    "title": "Dictate anywhere",
+    "subtitle": "First, download the voice model. It runs on this computer: your audio never leaves it.",
+    "showOthers": "See {{count}} other models",
+    "showOthers_one": "See {{count}} other model",
+    "hideOthers": "Hide other models",
     "recommended": "Recommended",
     "download": "Download",
     "downloading": "Downloading...",
@@ -108,7 +112,7 @@
     },
     "permissions": {
       "title": "Permissions Required",
-      "description": "Ezequielito needs a couple of permissions to work properly.",
+      "description": "Vento Voice needs a couple of permissions to work properly.",
       "microphone": {
         "title": "Microphone Access",
         "description": "Required to hear your voice for transcription."
@@ -166,7 +170,7 @@
     "general": {
       "title": "General",
       "shortcut": {
-        "title": "Ezequielito Shortcuts",
+        "title": "Vento Voice Shortcuts",
         "description": "Configure keyboard shortcuts to trigger speech-to-text recording",
         "loading": "Loading shortcuts...",
         "none": "No shortcuts configured",
@@ -332,11 +336,11 @@
       },
       "autostart": {
         "label": "Launch on Startup",
-        "description": "Automatically start Ezequielito when you log in to your computer."
+        "description": "Automatically start Vento Voice when you log in to your computer."
       },
       "showTrayIcon": {
         "label": "Show Tray Icon",
-        "description": "Display the Ezequielito icon in the system tray."
+        "description": "Display the Vento Voice icon in the system tray."
       },
       "overlay": {
         "title": "Overlay Position",
@@ -513,7 +517,7 @@
       },
       "updateChecks": {
         "label": "Check for Updates",
-        "description": "Automatically check for new versions of Ezequielito"
+        "description": "Automatically check for new versions of Vento Voice"
       },
       "soundTheme": {
         "label": "Sound Theme",
@@ -581,28 +585,28 @@
       "title": "About",
       "version": {
         "title": "Version",
-        "description": "Current version of Ezequielito"
+        "description": "Current version of Vento Voice"
       },
       "appDataDirectory": {
         "title": "App Data Directory",
-        "description": "Location where Ezequielito stores its data"
+        "description": "Location where Vento Voice stores its data"
       },
       "sourceCode": {
         "title": "Source Code",
-        "description": "View source code and contribute",
+        "description": "View the source code",
         "button": "View on GitHub"
-      },
-      "supportDevelopment": {
-        "title": "Support Development",
-        "description": "Help us continue building Ezequielito",
-        "button": "Donate"
       },
       "acknowledgments": {
         "title": "Acknowledgments",
         "whisper": {
           "title": "Whisper.cpp",
           "description": "High-performance inference of OpenAI's Whisper automatic speech recognition model",
-          "details": "Ezequielito uses Whisper.cpp for fast, local speech-to-text processing. Thanks to the amazing work by Georgi Gerganov and contributors."
+          "details": "Vento Voice uses Whisper.cpp for fast, local speech-to-text processing. Thanks to the amazing work by Georgi Gerganov and contributors."
+        },
+        "handy": {
+          "title": "Handy",
+          "description": "The open-source dictation app Vento Voice is built on",
+          "details": "Vento Voice started from Handy, by CJ Pais and contributors, released under the MIT licence. Recording, local transcription and much of what makes dictation reliable come from that work. Vento Voice is a separate product and is not affiliated with or endorsed by Handy."
         }
       }
     },
@@ -691,7 +695,7 @@
   },
   "accessibility": {
     "permissionsRequired": "Accessibility Permissions Required",
-    "permissionsDescription": "Ezequielito needs accessibility permissions to type transcribed text.",
+    "permissionsDescription": "Vento Voice needs accessibility permissions to type transcribed text.",
     "openSettings": "Open System Settings",
     "dismiss": "Dismiss"
   },
@@ -714,7 +718,7 @@
   },
   "appLanguage": {
     "title": "Application Language",
-    "description": "Change the language of the Ezequielito interface"
+    "description": "Change the language of the Vento Voice interface"
   },
   "overlay": {
     "transcribing": "Transcribing...",
@@ -743,7 +747,7 @@
     }
   },
   "app": {
-    "name": "Ezequielito"
+    "name": "Vento Voice"
   },
   "views": {
     "home": {
@@ -839,7 +843,7 @@
         "shared": "Shared with team"
       },
       "promo": {
-        "title": "Ezequielito writes like <emphasis>you</emphasis>.",
+        "title": "Vento Voice writes like <emphasis>you</emphasis>.",
         "description": "Add proper names, your industry's jargon, client brands. Every dictation respects them and corrects them automatically, even if the model misheard them."
       },
       "suggestions": {
@@ -934,7 +938,7 @@
         }
       },
       "unassigned": "Unassigned",
-      "assignHint": "To assign hotkeys: Settings → General → “Ezequielito shortcuts” group."
+      "assignHint": "To assign hotkeys: Settings → General → “Vento Voice” group."
     },
     "scratchpad": {
       "description": "Free-form editor. Assign a hotkey to <binding>Transcribe to Scratchpad</binding> in Settings → General to dictate straight into it.",

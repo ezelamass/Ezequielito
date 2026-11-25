@@ -65,7 +65,7 @@ export const HomeView: React.FC = () => {
       <VentoAccount variant="card" />
 
       <header className="space-y-1">
-        <h1 className="font-serif italic text-5xl text-accent">
+        <h1 className="font-serif italic text-5xl text-ez-text">
           {t("app.name")}
         </h1>
         <p className="text-mid-gray text-sm">{t("views.home.tagline")}</p>

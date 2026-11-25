@@ -9,7 +9,7 @@ import {
   Cpu,
   User,
 } from "lucide-react";
-import HandyHand from "../icons/HandyHand";
+import VentoMark from "../icons/VentoMark";
 import { useSettings } from "../../hooks/useSettings";
 import {
   AccountSettings,
@@ -60,7 +60,7 @@ const SUB_SECTIONS: SubSectionConfig[] = [
   {
     id: "general",
     labelKey: "sidebar.general",
-    icon: HandyHand,
+    icon: VentoMark,
     component: GeneralSettings,
     enabled: () => true,
   },
