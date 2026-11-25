@@ -114,6 +114,8 @@ const settingUpdaters: {
     commands.changeSelectedLanguageSetting(value as string),
   overlay_position: (value) =>
     commands.changeOverlayPositionSetting(value as string),
+  context_awareness: (value) =>
+    commands.changeContextAwarenessSetting(value as boolean),
   overlay_idle_pill: (value) =>
     commands.changeOverlayIdlePillSetting(value as boolean),
   debug_mode: (value) => commands.changeDebugModeSetting(value as boolean),

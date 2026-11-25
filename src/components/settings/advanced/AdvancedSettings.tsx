@@ -9,6 +9,7 @@ import { DictionarySync } from "../DictionarySync";
 import { AppPromptMapping } from "../AppPromptMapping";
 import { HandsFreeToggle } from "../HandsFreeToggle";
 import { OverlayIdlePill } from "../OverlayIdlePill";
+import { ContextAwareness } from "../ContextAwareness";
 import { SettingsGroup } from "../../ui/SettingsGroup";
 import { StartHidden } from "../StartHidden";
 import { AutostartToggle } from "../AutostartToggle";
@@ -59,6 +60,7 @@ export const AdvancedSettings: React.FC = () => {
 
       <SettingsGroup title={t("app.name")}>
         <HandsFreeToggle descriptionMode="tooltip" grouped />
+        <ContextAwareness descriptionMode="tooltip" grouped />
         <VoiceCommands descriptionMode="tooltip" grouped />
         <AppPromptMapping descriptionMode="tooltip" grouped />
         <DictionarySync descriptionMode="tooltip" grouped />
