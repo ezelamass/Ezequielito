@@ -12,6 +12,18 @@ Análisis de solo lectura, 2026-11-25. Compara nuestra rama (`claude/relaxed-gal
 - Hacerlo antes de lanzar importa: el motor nuevo obliga a bajar de nuevo los modelos ONNX (Parakeet V3, nuestro recomendado, pasa de 456 MB a 740 MB). Hoy eso no le cuesta a ningún usuario.
 - Mientras tanto hay 7 arreglos chicos que entran limpios hoy ([Paso 0](#paso-0-siete-arreglos-que-entran-limpios-hoy)). No hacer nada tampoco es gratis: Handy avanza unos 50 commits por mes y seguimos con Rust fijado en 1.97.
 
+## Lo que ya se trajo a mano (v0.2.1, 2026-11-25)
+
+Ezequiel probó la v0.2.0 en Windows y la transcripción "a veces no es tan precisa". Tres arreglos de audio de Handy atacan justo eso y no dependen del motor nuevo, así que se portaron a mano (el `cherry-pick` choca porque en el medio está el cambio de motor):
+
+| Arreglo de Handy                                         | Qué se perdía                                                                                                                                           | Dónde quedó                                             |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| #1344 `eb9301e` reiniciar el resampler entre grabaciones | Los primeros ~30 ms de cada dictado traían audio del anterior: primera palabra rota o un pedazo de texto viejo.                                         | `FrameResampler::reset()`, llamado al empezar a grabar. |
+| #1958 `df21683` no perder la cola del audio (callback)   | El último bloque del micrófono, capturado antes de soltar la tecla, se tiraba: hasta un período de callback (peor con Bluetooth). Es la última palabra. | `handle_input_block` en `recorder.rs`.                  |
+| #1958 `df21683` no perder la cola del audio (resampler)  | Los 10 a 30 ms que quedaban en la línea de retardo del resampler al terminar.                                                                           | `FrameResampler::finish()`.                             |
+
+Con sus tests (11 del resampler, 1 del callback). **No se trajeron:** `cb9654c` (micrófono más rápido, 297 líneas sobre archivos que cambiamos nosotros) y `2203a82` (corrección por diccionario: su arreglo principal apaga la coincidencia aproximada para palabras con tilde, que para español es peor). Los dos quedan para el rebase.
+
 ## Temas: qué arregla cada uno y qué hacemos
 
 Veredictos: **Vale la pena** (arregla algo que un usuario nuestro de Windows o macOS se va a encontrar, o saca un problema de build), **Lindo de tener**, **No traer**.
