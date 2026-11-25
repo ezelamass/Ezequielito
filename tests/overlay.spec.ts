@@ -14,7 +14,11 @@ const SETTINGS = {
   app_language: "en",
 };
 
-async function openOverlay(page: Page, size = { width: 280, height: 64 }) {
+/** Window sizes, as set in src-tauri/src/overlay.rs. */
+const ACTIVE = { width: 232, height: 38 };
+const IDLE = { width: 136, height: 28 };
+
+async function openOverlay(page: Page, size = ACTIVE) {
   await installTauriMock(page, {
     responses: { get_app_settings: SETTINGS },
   });
@@ -54,16 +58,23 @@ test.describe("overlay pill", () => {
   test("idle: shows the hotkey on hover and starts dictation on click", async ({
     page,
   }, testInfo) => {
-    await openOverlay(page, { width: 140, height: 34 });
+    await openOverlay(page, IDLE);
     await emitTauri(page, "show-overlay", "idle");
 
-    const pill = page.locator(".ez-idle__pill");
+    const pill = page.locator(".ez-pill--idle");
     await expect(pill).toBeVisible();
-    await expect(page.locator(".ez-idle__label")).toHaveText("Ctrl + Space");
+    await expect(pill).toHaveCSS("height", "6px");
+    await expect(page.locator(".ez-pill__idle-label")).toHaveText(
+      "Ctrl + Space",
+    );
     await capture(page, testInfo.outputPath("idle.png"));
 
     await pill.hover();
-    await expect(pill).toHaveCSS("width", "132px");
+    await expect(pill).toHaveCSS("height", "20px");
+    // A modest growth: wide enough for the hotkey, never the full window.
+    const hovered = await pill.boundingBox();
+    expect(hovered!.width).toBeGreaterThan(60);
+    expect(hovered!.width).toBeLessThanOrEqual(128);
     await capture(page, testInfo.outputPath("idle-hover.png"));
 
     await pill.click();
@@ -71,6 +82,57 @@ test.describe("overlay pill", () => {
       .poll(() => commandNames(page))
       .toContain("start_dictation_from_overlay");
   });
+
+  test("the idle bar grows into the recording pill instead of being replaced", async ({
+    page,
+  }) => {
+    await openOverlay(page);
+    await emitTauri(page, "show-overlay", "idle");
+    const pill = page.locator(".ez-pill");
+    await expect(pill).toHaveCSS("width", "40px");
+    await pill.evaluate((el) => el.setAttribute("data-same", "yes"));
+
+    await emitTauri(page, "show-overlay", "recording");
+
+    // Still the same element, so its size is animated rather than swapped.
+    await expect(pill).toHaveAttribute("data-same", "yes");
+    await expect(pill).toHaveClass(/ez-pill--recording/);
+    await expect(pill).toHaveCSS("width", "124px");
+    await expect(pill).toHaveCSS("height", "26px");
+    const transition = await pill.evaluate(
+      (el) => getComputedStyle(el).transitionProperty,
+    );
+    expect(transition).toContain("width");
+    expect(transition).toContain("height");
+
+    await emitTauri(page, "show-overlay", "idle");
+    await expect(pill).toHaveAttribute("data-same", "yes");
+    await expect(pill).toHaveCSS("width", "40px");
+  });
+
+  for (const [name, size, state] of [
+    ["idle", IDLE, "idle"],
+    ["recording", ACTIVE, "recording"],
+    ["error", ACTIVE, "error"],
+  ] as const) {
+    test(`${name}: the border is never cut off by the window`, async ({
+      page,
+    }) => {
+      await openOverlay(page, size);
+      await emitTauri(page, "show-overlay", state);
+      const pill = page.locator(".ez-pill");
+      await expect(pill).toHaveClass(new RegExp(`ez-pill--${state}`));
+      await page.evaluate(() =>
+        Promise.all(document.getAnimations().map((a) => a.finished)),
+      );
+
+      const box = (await pill.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(3);
+      expect(box.y).toBeGreaterThanOrEqual(3);
+      expect(box.x + box.width).toBeLessThanOrEqual(size.width - 3);
+      expect(box.y + box.height).toBeLessThanOrEqual(size.height - 3);
+    });
+  }
 
   test("recording: ✕ cancels and there is no ✓ until locked", async ({
     page,
@@ -96,7 +158,7 @@ test.describe("overlay pill", () => {
 
     const confirm = page.locator(".ez-pill__btn--confirm");
     await expect(confirm).toBeVisible();
-    await expect(page.locator(".ez-pill__lock-badge")).toBeVisible();
+    await expect(page.locator(".ez-pill")).toHaveClass(/ez-pill--locked/);
     await capture(page, testInfo.outputPath("locked.png"));
 
     await confirm.click();

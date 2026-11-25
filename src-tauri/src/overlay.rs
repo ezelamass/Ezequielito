@@ -34,15 +34,17 @@ tauri_panel! {
     })
 }
 
-// Phase 10 rescue: pill is now ~250px wide and the lock badge floats
-// ~6px below it, so the window needs ~64px of vertical room.
-const OVERLAY_WIDTH: f64 = 280.0;
-const OVERLAY_HEIGHT: f64 = 64.0;
+// The window while the pill shows a live state. Wide enough for the
+// longest message (216px) plus air for its border and glow; the recording
+// pill itself is 124 × 26.
+const OVERLAY_WIDTH: f64 = 232.0;
+const OVERLAY_HEIGHT: f64 = 38.0;
 
 // Idle pill: the window shrinks to the hover target so the transparent
 // area around it does not swallow clicks meant for the app underneath.
-const OVERLAY_IDLE_WIDTH: f64 = 140.0;
-const OVERLAY_IDLE_HEIGHT: f64 = 34.0;
+// The bar is 40 × 6 and grows to at most 128 × 20 on hover.
+const OVERLAY_IDLE_WIDTH: f64 = 136.0;
+const OVERLAY_IDLE_HEIGHT: f64 = 28.0;
 
 /// How long an error stays on the pill before it returns to idle/hidden.
 const OVERLAY_ERROR_MS: u64 = 2600;

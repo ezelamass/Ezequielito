@@ -1,97 +1,164 @@
 /*
- * Recording overlay: the floating pill, in Vento's palette.
+ * The floating pill, in Vento's palette.
+ *
+ * One element for every state. Changing state changes its width and
+ * height, and those are animated: the idle bar GROWS into the recording
+ * pill and shrinks back, instead of one thing vanishing and another fading
+ * in. Content cross-fades a moment after the shape starts moving.
+ *
+ * Sizes are deliberately small: the pill sits over other people's apps.
+ *   idle        40 × 6    a thin bar
+ *   idle hover  ~90 × 20  the hotkey
+ *   recording   124 × 26  ✕ · waveform · (✓)
+ *   processing   52 × 26  spinner
+ *   message     up to 216 × 26
  *
  * Lime while recording (the action), Pistacho when hands-free is locked
  * ("you can let go") and for notices, the error state colour for errors.
- * Buttons are circular: ✕ on the left to cancel, ✓ on the right when locked.
  */
 
 :root {
-  --ez-pill-bg: #0a0a0aee;
-  --ez-pill-border: #2a2a2a;
+  --ez-pill-bg: #0a0a0af2;
+  --ez-pill-border: rgba(255, 255, 255, 0.34);
   --ez-pill-accent: #c8ff00;
   --ez-pill-calm: #b6e59e;
   --ez-pill-error: #ff7a7a;
   --ez-pill-text: #e8e4de;
   --ez-pill-muted: #8a8580;
+
+  /* Unhurried, no overshoot: fast at first, then it settles. */
+  --ez-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ez-morph: 320ms;
 }
 
-.ez-pill {
-  position: relative;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 8px;
-  height: 40px;
-  min-width: 200px;
-  max-width: 320px;
-  padding: 0 10px;
-  background: var(--ez-pill-bg);
-  border: 1px solid var(--ez-pill-border);
-  border-radius: 999px;
-  opacity: 0;
-  transform: translateY(8px) scale(0.96);
-  transition:
-    opacity 220ms ease-out,
-    transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    border-color 200ms ease-out,
-    box-shadow 200ms ease-out;
+/* Make the body fully transparent so the pill floats over any app */
+body {
+  background: transparent !important;
+  margin: 0;
+  padding: 0;
+}
+
+/*
+ * The stage is the whole (transparent) window. The pill is pinned to the
+ * edge nearest the screen border, with a few pixels of air so its border
+ * and glow are never clipped by the window.
+ */
+.ez-stage {
   box-sizing: border-box;
-  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: var(--ez-pill-text);
-  -webkit-app-region: drag;
+  width: 100%;
+  height: 100%;
+  padding: 4px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 180ms ease-out;
   user-select: none;
 }
 
-.ez-pill--visible {
-  opacity: 1;
-  transform: translateY(0) scale(1);
+.ez-stage--top {
+  align-items: flex-start;
 }
 
-/* Subtle lime glow + brightened border while actively recording */
-.ez-pill--visible:not(.ez-pill--processing):not(.ez-pill--locked):not(
-    .ez-pill--error
-  ):not(.ez-pill--notice) {
-  border-color: rgba(200, 255, 0, 0.22);
+.ez-stage--visible {
+  opacity: 1;
+}
+
+.ez-pill {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 40px;
+  height: 6px;
+  padding: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  background: var(--ez-pill-bg);
+  border: 1px solid var(--ez-pill-border);
+  border-radius: 999px;
+  color: var(--ez-pill-text);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  transition:
+    width var(--ez-morph) var(--ez-ease),
+    height var(--ez-morph) var(--ez-ease),
+    border-color 220ms ease-out,
+    box-shadow 220ms ease-out;
+}
+
+/* Whatever is inside appears after the shape has started to open. */
+.ez-pill > * {
+  animation: ez-pill-content-in 200ms ease-out 110ms both;
+}
+
+@keyframes ez-pill-content-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* --- idle ------------------------------------------------------------ */
+
+.ez-pill--idle {
+  cursor: pointer;
+}
+
+.ez-pill__idle-label {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  animation: none;
+  transition: opacity 120ms ease-out;
+}
+
+.ez-stage:hover .ez-pill--idle {
+  width: var(--ez-idle-hover-width, 90px);
+  height: 20px;
+  border-color: rgba(200, 255, 0, 0.45);
+}
+
+.ez-stage:hover .ez-pill--idle .ez-pill__idle-label {
+  opacity: 1;
+  transition-delay: 110ms;
+}
+
+.ez-pill--idle:active {
+  border-color: var(--ez-pill-accent);
+}
+
+/* --- recording -------------------------------------------------------- */
+
+.ez-pill--recording {
+  width: 124px;
+  height: 26px;
+  padding: 0 5px;
+  justify-content: space-between;
+  border-color: rgba(200, 255, 0, 0.28);
   box-shadow:
     0 0 0 1px rgba(200, 255, 0, 0.06),
-    0 4px 12px rgba(0, 0, 0, 0.4);
+    0 3px 10px rgba(0, 0, 0, 0.4);
 }
 
-/* Hands-free locked: Pistacho border to signal "you can let go now" */
+/* Hands-free locked: Pistacho, to say "you can let go now". */
 .ez-pill--locked {
-  border-color: rgba(182, 229, 158, 0.55);
+  border-color: rgba(182, 229, 158, 0.6);
   box-shadow:
     0 0 0 1px rgba(182, 229, 158, 0.1),
-    0 4px 14px rgba(0, 0, 0, 0.45);
+    0 3px 10px rgba(0, 0, 0, 0.45);
 }
 
-/* Processing: dimmer */
-.ez-pill--processing {
-  border-color: var(--ez-pill-border);
-  opacity: 0.92;
+.ez-pill__btn,
+.ez-pill__btn-spacer {
+  flex: none;
+  width: 18px;
+  height: 18px;
 }
 
-.ez-pill__left,
-.ez-pill__right {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 22px;
-}
-
-.ez-pill__center {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 130px;
-  height: 100%;
-}
-
-/* Circular button base (cancel + confirm) */
 .ez-pill__btn {
-  width: 22px;
-  height: 22px;
   border-radius: 50%;
   border: none;
   background: transparent;
@@ -100,20 +167,10 @@
   justify-content: center;
   cursor: pointer;
   color: var(--ez-pill-muted);
-  -webkit-app-region: no-drag;
+  padding: 0;
   transition:
     background-color 150ms ease-out,
-    color 150ms ease-out,
-    transform 100ms ease-out;
-  padding: 0;
-}
-
-.ez-pill__btn:hover {
-  transform: scale(1.08);
-}
-
-.ez-pill__btn:active {
-  transform: scale(0.94);
+    color 150ms ease-out;
 }
 
 .ez-pill__btn--cancel:hover {
@@ -122,25 +179,23 @@
 }
 
 .ez-pill__btn--confirm {
-  color: var(--ez-pill-accent);
+  color: var(--ez-pill-calm);
 }
 
 .ez-pill__btn--confirm:hover {
-  background: rgba(200, 255, 0, 0.18);
+  background: rgba(182, 229, 158, 0.18);
 }
 
-/* Waveform: lime bars, equally spaced */
 .ez-pill__waveform {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  height: 26px;
-  width: 100%;
+  gap: 2.5px;
+  height: 16px;
 }
 
 .ez-pill__bar {
-  width: 4px;
+  width: 3px;
   min-height: 3px;
   background: var(--ez-pill-accent);
   border-radius: 2px;
@@ -153,20 +208,26 @@
   background: var(--ez-pill-calm);
 }
 
-/* Spinner during transcribing / processing — Wispr-style dot circle */
+/* --- transcribing / processing ----------------------------------------- */
+
+.ez-pill--processing {
+  width: 52px;
+  height: 26px;
+}
+
 .ez-pill__spinner {
   position: relative;
-  width: 22px;
-  height: 22px;
+  width: 16px;
+  height: 16px;
 }
 
 .ez-pill__spinner span {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 3px;
-  height: 3px;
-  margin: -1.5px 0 0 -1.5px;
+  width: 2.5px;
+  height: 2.5px;
+  margin: -1.25px 0 0 -1.25px;
   border-radius: 50%;
   background: var(--ez-pill-accent);
   opacity: 0.25;
@@ -174,35 +235,35 @@
 }
 
 .ez-pill__spinner span:nth-child(1) {
-  transform: translate(0, -9px);
+  transform: translate(0, -6.5px);
   animation-delay: 0s;
 }
 .ez-pill__spinner span:nth-child(2) {
-  transform: translate(6px, -6px);
+  transform: translate(4.6px, -4.6px);
   animation-delay: 0.125s;
 }
 .ez-pill__spinner span:nth-child(3) {
-  transform: translate(9px, 0);
+  transform: translate(6.5px, 0);
   animation-delay: 0.25s;
 }
 .ez-pill__spinner span:nth-child(4) {
-  transform: translate(6px, 6px);
+  transform: translate(4.6px, 4.6px);
   animation-delay: 0.375s;
 }
 .ez-pill__spinner span:nth-child(5) {
-  transform: translate(0, 9px);
+  transform: translate(0, 6.5px);
   animation-delay: 0.5s;
 }
 .ez-pill__spinner span:nth-child(6) {
-  transform: translate(-6px, 6px);
+  transform: translate(-4.6px, 4.6px);
   animation-delay: 0.625s;
 }
 .ez-pill__spinner span:nth-child(7) {
-  transform: translate(-9px, 0);
+  transform: translate(-6.5px, 0);
   animation-delay: 0.75s;
 }
 .ez-pill__spinner span:nth-child(8) {
-  transform: translate(-6px, -6px);
+  transform: translate(-4.6px, -4.6px);
   animation-delay: 0.875s;
 }
 
@@ -217,60 +278,35 @@
   }
 }
 
-/* Hands-free badge: small mono pill below the main one */
-.ez-pill__lock-badge {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 2px 8px;
-  font-size: 9px;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  letter-spacing: 0.12em;
-  color: var(--ez-pill-calm);
-  background: var(--ez-pill-bg);
-  border: 1px solid rgba(182, 229, 158, 0.5);
-  border-radius: 999px;
-  animation: ez-pill-lock-pop 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+/* --- message: error or notice ------------------------------------------ */
+
+.ez-pill--error,
+.ez-pill--notice {
+  width: 216px;
+  height: 26px;
+  padding: 0 12px;
 }
 
-@keyframes ez-pill-lock-pop {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -4px) scale(0.9);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0) scale(1);
-  }
-}
-
-/* Error: short message, warm border */
 .ez-pill--error {
   border-color: rgba(255, 122, 122, 0.6);
   box-shadow:
     0 0 0 1px rgba(255, 122, 122, 0.12),
-    0 4px 14px rgba(0, 0, 0, 0.45);
+    0 3px 10px rgba(0, 0, 0, 0.45);
 }
 
-/* Notice (a word was added to the dictionary): it worked, so lime, not warm */
 .ez-pill--notice {
-  border-color: color-mix(in srgb, var(--ez-pill-calm) 55%, transparent);
+  border-color: rgba(182, 229, 158, 0.55);
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--ez-pill-calm) 10%, transparent),
-    0 4px 14px rgba(0, 0, 0, 0.45);
+    0 0 0 1px rgba(182, 229, 158, 0.1),
+    0 3px 10px rgba(0, 0, 0, 0.45);
 }
 
 .ez-pill__error,
 .ez-pill__notice {
   font-size: 11px;
   line-height: 1.2;
-  color: var(--ez-pill-text);
-  text-align: center;
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 220px;
   font-family:
     system-ui,
     -apple-system,
@@ -278,95 +314,13 @@
     sans-serif;
 }
 
-/*
- * Idle pill. The window is only as big as this hover target (140×34), so
- * the bar sits against the edge nearest the screen border and grows on
- * hover without the window having to resize.
- */
-.ez-idle {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 200ms ease-out;
-  user-select: none;
-}
-
-.ez-idle--top {
-  align-items: flex-start;
-}
-
-.ez-idle--visible {
-  opacity: 1;
-}
-
-.ez-idle__pill {
-  width: 44px;
-  height: 8px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  background: var(--ez-pill-bg);
-  border: 1px solid rgba(255, 255, 255, 0.38);
-  border-radius: 999px;
-  color: var(--ez-pill-text);
-  cursor: pointer;
-  transition:
-    width 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    height 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    border-color 150ms ease-out;
-  -webkit-app-region: no-drag;
-}
-
-.ez-idle__content {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  opacity: 0;
-  white-space: nowrap;
-  transition: opacity 120ms ease-out;
-}
-
-.ez-idle__label {
-  font-size: 10px;
-  letter-spacing: 0.02em;
-  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
-.ez-idle:hover .ez-idle__pill,
-.ez-idle__pill:focus-visible {
-  width: 132px;
-  height: 28px;
-  border-color: rgba(200, 255, 0, 0.45);
-  outline: none;
-}
-
-.ez-idle:hover .ez-idle__content,
-.ez-idle__pill:focus-visible .ez-idle__content {
-  opacity: 1;
-  transition-delay: 80ms;
-}
-
-.ez-idle__pill:active {
-  transform: scale(0.97);
-}
-
 @media (prefers-reduced-motion: reduce) {
+  .ez-stage,
   .ez-pill,
-  .ez-idle,
-  .ez-idle__pill,
-  .ez-idle__content {
+  .ez-pill__idle-label {
     transition: none;
   }
-}
-
-/* Make the body fully transparent so the pill floats over any app */
-body {
-  background: transparent !important;
-  margin: 0;
-  padding: 0;
+  .ez-pill > * {
+    animation: none;
+  }
 }

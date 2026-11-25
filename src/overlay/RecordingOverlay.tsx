@@ -10,17 +10,19 @@ import { formatShortcut } from "./formatShortcut";
 /**
  * Floating pill.
  *
- * State machine (driven by Rust events):
- *  - HIDDEN: nothing on screen
- *  - IDLE: small resting bar; hover shows the hotkey, click starts a
+ * One shape for every state: it never disappears and comes back, it grows
+ * and shrinks (see RecordingOverlay.css). Rust drives the state:
+ *
+ *  - hidden: nothing on screen
+ *  - idle: a thin bar; hovering shows the hotkey, a click starts a
  *    hands-free dictation
- *  - RECORDING: waveform reactive to mic level + cancel button (✕)
- *  - LOCKED: hands-free engaged — waveform + badge + check (✓) that stops
+ *  - recording: waveform reactive to the mic + cancel (✕)
+ *  - recording, locked: hands-free engaged; adds confirm (✓), which stops
  *    the recording and transcribes it
- *  - TRANSCRIBING / PROCESSING: spinner
- *  - ERROR: short message, then Rust sends us back to idle / hidden. The
+ *  - transcribing / processing: spinner
+ *  - error: a short message, then Rust sends it back to idle / hidden. The
  *    same state carries notices (a word was added to the dictionary), which
- *    are not errors and do not look like one
+ *    are not errors and look different.
  *
  * Events:
  *  - show-overlay (payload: OverlayState)
@@ -57,24 +59,12 @@ const NOTICE_KEYS: Record<string, string> = {
   word_known: "overlay.notices.wordKnown",
 };
 
-const BAR_COUNT = 12;
+const BAR_COUNT = 9;
 
-const MicIcon: React.FC = () => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <rect x="9" y="2" width="6" height="12" rx="3" />
-    <path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4" />
-  </svg>
-);
+/** Width of the idle pill while hovered: just enough for its label. */
+function idleHoverWidth(label: string): number {
+  return Math.max(64, Math.min(128, 26 + label.length * 6.1));
+}
 
 const RecordingOverlay: React.FC = () => {
   const { t } = useTranslation();
@@ -178,81 +168,103 @@ const RecordingOverlay: React.FC = () => {
   const isNotice = state === "error" && noticeKey !== undefined;
   const isError = state === "error" && !isNotice;
 
-  if (isIdle) {
-    return (
-      <div
-        dir={direction}
-        className={`ez-idle ${isVisible ? "ez-idle--visible" : ""} ${
-          atTop ? "ez-idle--top" : ""
-        }`}
-      >
-        <button
-          type="button"
-          className="ez-idle__pill"
-          onClick={handleStart}
-          aria-label={t("overlay.idle.start")}
-        >
-          <span className="ez-idle__content">
-            <MicIcon />
-            <span className="ez-idle__label">
-              {shortcut || t("overlay.idle.start")}
-            </span>
-          </span>
-        </button>
-      </div>
-    );
-  }
+  const idleLabel = shortcut || t("overlay.idle.start");
+
+  const modifiers = [
+    // The "error" state is shared by errors and notices; which of the two
+    // it is comes from the code, below.
+    isProcessing ? "ez-pill--processing" : "",
+    isIdle ? "ez-pill--idle" : "",
+    isRecording ? "ez-pill--recording" : "",
+    locked && isRecording ? "ez-pill--locked" : "",
+    isError ? "ez-pill--error" : "",
+    isNotice ? "ez-pill--notice" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div
       dir={direction}
-      className={`ez-pill ${isVisible ? "ez-pill--visible" : ""} ${
-        locked ? "ez-pill--locked" : ""
-      } ${isProcessing ? "ez-pill--processing" : ""} ${
-        isError ? "ez-pill--error" : ""
-      } ${isNotice ? "ez-pill--notice" : ""}`}
+      className={`ez-stage ${isVisible ? "ez-stage--visible" : ""} ${
+        atTop ? "ez-stage--top" : ""
+      }`}
     >
-      {/* LEFT: cancel button while recording, hidden otherwise */}
-      <div className="ez-pill__left">
-        {isRecording && (
-          <button
-            type="button"
-            className="ez-pill__btn ez-pill__btn--cancel"
-            onClick={handleCancel}
-            aria-label={t("overlay.cancel")}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        )}
-      </div>
+      <div
+        className={`ez-pill ${modifiers}`}
+        style={
+          {
+            "--ez-idle-hover-width": `${idleHoverWidth(idleLabel)}px`,
+          } as React.CSSProperties
+        }
+        role={isIdle ? "button" : undefined}
+        aria-label={isIdle ? t("overlay.idle.start") : undefined}
+        onClick={isIdle ? handleStart : undefined}
+      >
+        {isIdle && <span className="ez-pill__idle-label">{idleLabel}</span>}
 
-      {/* CENTER: waveform, spinner, error message or notice */}
-      <div className="ez-pill__center">
         {isRecording && (
-          <div className="ez-pill__waveform">
-            {levels.map((v, i) => (
-              <div
-                key={i}
-                className="ez-pill__bar"
-                style={{
-                  height: `${Math.min(22, 3 + Math.pow(v, 0.6) * 19)}px`,
-                  opacity: Math.max(0.3, Math.min(1, v * 2)),
-                }}
-              />
-            ))}
-          </div>
+          <>
+            <button
+              type="button"
+              className="ez-pill__btn ez-pill__btn--cancel"
+              onClick={handleCancel}
+              aria-label={t("overlay.cancel")}
+            >
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="ez-pill__waveform">
+              {levels.map((v, i) => (
+                <div
+                  key={i}
+                  className="ez-pill__bar"
+                  style={{
+                    height: `${Math.min(15, 3 + Math.pow(v, 0.6) * 13)}px`,
+                    opacity: Math.max(0.35, Math.min(1, v * 2)),
+                  }}
+                />
+              ))}
+            </div>
+
+            {/* Keeps the waveform centred when there is no ✓. */}
+            {locked ? (
+              <button
+                type="button"
+                className="ez-pill__btn ez-pill__btn--confirm"
+                onClick={handleConfirm}
+                aria-label={t("overlay.confirm")}
+              >
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              </button>
+            ) : (
+              <span className="ez-pill__btn-spacer" aria-hidden="true" />
+            )}
+          </>
         )}
+
         {isProcessing && (
           <div
             className="ez-pill__spinner"
@@ -268,6 +280,7 @@ const RecordingOverlay: React.FC = () => {
             <span />
           </div>
         )}
+
         {isError && (
           <div className="ez-pill__error" role="alert">
             {t(ERROR_KEYS[errorCode] ?? ERROR_KEYS.generic)}
@@ -279,36 +292,6 @@ const RecordingOverlay: React.FC = () => {
           </div>
         )}
       </div>
-
-      {/* RIGHT: check/confirm button when locked; empty otherwise */}
-      <div className="ez-pill__right">
-        {isRecording && locked && (
-          <button
-            type="button"
-            className="ez-pill__btn ez-pill__btn--confirm"
-            onClick={handleConfirm}
-            aria-label={t("overlay.confirm")}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M20 6L9 17l-5-5" />
-            </svg>
-          </button>
-        )}
-      </div>
-
-      {/* Lock indicator: floating badge below the pill when hands-free engaged */}
-      {isRecording && locked && (
-        <div className="ez-pill__lock-badge">{t("overlay.handsFree")}</div>
-      )}
     </div>
   );
 };
