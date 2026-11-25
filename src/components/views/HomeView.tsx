@@ -23,7 +23,7 @@ export const HomeView: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const result = await commands.getHistoryEntries(null, 200);
+        const result = await commands.getHistoryEntries(null, null);
         if (result.status === "ok") {
           const entries = result.data.entries || [];
           const words = entries.reduce((sum: number, e: any) => {
@@ -41,11 +41,23 @@ export const HomeView: React.FC = () => {
     })();
   }, []);
 
+  // The name and the description stored with each binding come from the
+  // backend in English and are saved in the settings file: show the
+  // translated ones, and fall back to the stored text for an unknown id.
   const bindings = settings?.bindings || {};
   const configuredHotkeys = Object.values(bindings)
     .filter(
       (b: any) => b && b.current_binding && b.current_binding.trim() !== "",
     )
+    .map((b: any) => ({
+      ...b,
+      name: t(`settings.general.shortcut.bindings.${b.id}.name`, {
+        defaultValue: b.name,
+      }),
+      description: t(`settings.general.shortcut.bindings.${b.id}.description`, {
+        defaultValue: b.description,
+      }),
+    }))
     .sort((a: any, b: any) => a.name.localeCompare(b.name));
 
   return (

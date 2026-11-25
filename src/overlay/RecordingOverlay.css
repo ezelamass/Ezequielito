@@ -53,7 +53,7 @@
 /* Subtle lime glow + brightened border while actively recording */
 .ez-pill--visible:not(.ez-pill--processing):not(.ez-pill--locked):not(
     .ez-pill--error
-  ) {
+  ):not(.ez-pill--notice) {
   border-color: rgba(200, 255, 0, 0.22);
   box-shadow:
     0 0 0 1px rgba(200, 255, 0, 0.06),
@@ -255,7 +255,16 @@
     0 4px 14px rgba(0, 0, 0, 0.45);
 }
 
-.ez-pill__error {
+/* Notice (a word was added to the dictionary): it worked, so lime, not warm */
+.ez-pill--notice {
+  border-color: color-mix(in srgb, var(--ez-pill-accent) 55%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--ez-pill-accent) 10%, transparent),
+    0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
+.ez-pill__error,
+.ez-pill__notice {
   font-size: 11px;
   line-height: 1.2;
   color: var(--ez-pill-text);

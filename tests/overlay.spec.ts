@@ -129,6 +129,61 @@ test.describe("overlay pill", () => {
     await capture(page, testInfo.outputPath("error.png"));
   });
 
+  for (const [code, message] of [
+    ["word_added", "Added to your dictionary"],
+    ["word_known", "Already in your dictionary"],
+  ]) {
+    test(`"${code}" is a notice, not an error`, async ({ page }, testInfo) => {
+      await openOverlay(page);
+      await emitTauri(page, "overlay-error", code);
+      await emitTauri(page, "show-overlay", "error");
+
+      const pill = page.locator(".ez-pill");
+      await expect(page.getByRole("status")).toHaveText(message);
+      await expect(page.getByRole("alert")).toHaveCount(0);
+      await expect(pill).toHaveClass(/ez-pill--notice/);
+      await expect(pill).not.toHaveClass(/ez-pill--error/);
+      await capture(page, testInfo.outputPath(`${code}.png`));
+
+      // Lime border (the accent), not the warm one errors get.
+      const border = await pill.evaluate((el) => {
+        const [r, g, b] = getComputedStyle(el)
+          .borderTopColor.match(/[\d.]+/g)!
+          .map(Number);
+        return { r, g, b };
+      });
+      expect(border.g).toBeGreaterThan(border.r);
+      expect(border.g).toBeGreaterThan(border.b);
+    });
+  }
+
+  test("an error after a notice looks like an error again", async ({
+    page,
+  }) => {
+    await openOverlay(page);
+    await emitTauri(page, "overlay-error", "word_added");
+    await emitTauri(page, "show-overlay", "error");
+    await expect(page.locator(".ez-pill")).toHaveClass(/ez-pill--notice/);
+
+    await emitTauri(page, "overlay-error", "no_selection");
+    await emitTauri(page, "show-overlay", "error");
+
+    const pill = page.locator(".ez-pill");
+    await expect(page.getByRole("alert")).toHaveText("No text selected");
+    await expect(pill).toHaveClass(/ez-pill--error/);
+    await expect(pill).not.toHaveClass(/ez-pill--notice/);
+    await expect
+      .poll(() =>
+        pill.evaluate((el) => {
+          const [r, g] = getComputedStyle(el)
+            .borderTopColor.match(/[\d.]+/g)!
+            .map(Number);
+          return r > g;
+        }),
+      )
+      .toBe(true);
+  });
+
   test("an unknown error code falls back to the generic message", async ({
     page,
   }) => {

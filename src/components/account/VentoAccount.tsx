@@ -160,6 +160,7 @@ const SignedIn: React.FC<PartProps> = ({ account, showTitle }) => {
 
   const cleanup = getSetting("vento_cleanup") ?? true;
   const voiceEnabled = status?.voice_enabled ?? null;
+  const limitReached = status?.limit_reached === true;
 
   const handleSync = async () => {
     setSyncing(true);
@@ -189,7 +190,11 @@ const SignedIn: React.FC<PartProps> = ({ account, showTitle }) => {
           <div className="text-sm font-medium truncate select-text">
             {status?.email}
           </div>
-          <VoiceStatus voiceEnabled={voiceEnabled} cleanup={cleanup} />
+          <VoiceStatus
+            voiceEnabled={voiceEnabled}
+            cleanup={cleanup}
+            limitReached={limitReached}
+          />
         </div>
         <Button
           variant="secondary"
@@ -234,13 +239,16 @@ const SignedIn: React.FC<PartProps> = ({ account, showTitle }) => {
 const VoiceStatus: React.FC<{
   voiceEnabled: boolean | null;
   cleanup: boolean;
-}> = ({ voiceEnabled, cleanup }) => {
+  /** Today's cleanup allowance is used up. */
+  limitReached: boolean;
+}> = ({ voiceEnabled, cleanup, limitReached }) => {
   const { t } = useTranslation();
 
-  let state: "active" | "paused" | "notEnabled" | "checking";
+  let state: "active" | "limitReached" | "paused" | "notEnabled" | "checking";
   if (voiceEnabled === null) state = "checking";
   else if (!voiceEnabled) state = "notEnabled";
-  else state = cleanup ? "active" : "paused";
+  else if (!cleanup) state = "paused";
+  else state = limitReached ? "limitReached" : "active";
 
   return (
     <div

@@ -18,12 +18,15 @@ import { formatShortcut } from "./formatShortcut";
  *  - LOCKED: hands-free engaged — waveform + badge + check (✓) that stops
  *    the recording and transcribes it
  *  - TRANSCRIBING / PROCESSING: spinner
- *  - ERROR: short message, then Rust sends us back to idle / hidden
+ *  - ERROR: short message, then Rust sends us back to idle / hidden. The
+ *    same state carries notices (a word was added to the dictionary), which
+ *    are not errors and do not look like one
  *
  * Events:
  *  - show-overlay (payload: OverlayState)
  *  - hide-overlay
- *  - overlay-error (payload: error code, sent right before show-overlay "error")
+ *  - overlay-error (payload: error or notice code, sent right before
+ *    show-overlay "error")
  *  - mic-level (payload: number[] — waveform levels)
  *  - hands-free-locked (payload: boolean)
  */
@@ -46,6 +49,12 @@ const ERROR_KEYS: Record<string, string> = {
   ai_not_configured: "overlay.errors.aiNotConfigured",
   ai_failed: "overlay.errors.aiFailed",
   generic: "overlay.errors.generic",
+};
+
+/** Codes that arrive through `overlay-error` but report something that worked. */
+const NOTICE_KEYS: Record<string, string> = {
+  word_added: "overlay.notices.wordAdded",
+  word_known: "overlay.notices.wordKnown",
 };
 
 const BAR_COUNT = 12;
@@ -165,7 +174,9 @@ const RecordingOverlay: React.FC = () => {
   const isIdle = state === "idle";
   const isRecording = state === "recording";
   const isProcessing = state === "transcribing" || state === "processing";
-  const isError = state === "error";
+  const noticeKey = NOTICE_KEYS[errorCode];
+  const isNotice = state === "error" && noticeKey !== undefined;
+  const isError = state === "error" && !isNotice;
 
   if (isIdle) {
     return (
@@ -199,7 +210,7 @@ const RecordingOverlay: React.FC = () => {
         locked ? "ez-pill--locked" : ""
       } ${isProcessing ? "ez-pill--processing" : ""} ${
         isError ? "ez-pill--error" : ""
-      }`}
+      } ${isNotice ? "ez-pill--notice" : ""}`}
     >
       {/* LEFT: cancel button while recording, hidden otherwise */}
       <div className="ez-pill__left">
@@ -226,7 +237,7 @@ const RecordingOverlay: React.FC = () => {
         )}
       </div>
 
-      {/* CENTER: waveform, spinner or error message */}
+      {/* CENTER: waveform, spinner, error message or notice */}
       <div className="ez-pill__center">
         {isRecording && (
           <div className="ez-pill__waveform">
@@ -260,6 +271,11 @@ const RecordingOverlay: React.FC = () => {
         {isError && (
           <div className="ez-pill__error" role="alert">
             {t(ERROR_KEYS[errorCode] ?? ERROR_KEYS.generic)}
+          </div>
+        )}
+        {isNotice && (
+          <div className="ez-pill__notice" role="status">
+            {t(noticeKey)}
           </div>
         )}
       </div>

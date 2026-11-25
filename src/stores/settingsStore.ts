@@ -621,6 +621,11 @@ export const useSettingsStore = create<SettingsStore>()(
       listen("vento-profile-synced", () => {
         get().refreshSettings();
       });
+
+      // A word was added to the dictionary from a global hotkey.
+      listen("dictionary-changed", () => {
+        get().refreshSettings();
+      });
     },
   })),
 );

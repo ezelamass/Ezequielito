@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { commands, type AccountStatus, type Result } from "@/bindings";
 
 /** How long to wait before asking again whether Vento Voice is enabled. */
 const VOICE_RECHECK_DELAY_MS = 3000;
+
+/**
+ * Emitted by the backend when the account changed on its own: the session
+ * ended, or today's cleanup allowance ran out while dictating.
+ */
+const ACCOUNT_CHANGED_EVENT = "vento-account-changed";
 
 /** Code reported when the command itself could not run. */
 const UNAVAILABLE = "unavailable";
@@ -71,6 +78,26 @@ export const useVentoAccount = (): UseVentoAccountReturn => {
     });
     return () => {
       mounted.current = false;
+    };
+  }, [readStatus]);
+
+  // The backend says when the account changed without the UI asking for it.
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: UnlistenFn | undefined;
+    listen(ACCOUNT_CHANGED_EVENT, () => {
+      void readStatus();
+    })
+      .then((stop) => {
+        if (cancelled) stop();
+        else unlisten = stop;
+      })
+      .catch(() => {
+        // No event bridge (outside Tauri): the status is still read on mount.
+      });
+    return () => {
+      cancelled = true;
+      unlisten?.();
     };
   }, [readStatus]);
 

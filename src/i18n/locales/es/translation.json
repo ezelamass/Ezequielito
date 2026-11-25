@@ -184,6 +184,54 @@
           "transcribe_with_post_process": {
             "name": "Tecla de Post Procesamiento",
             "description": "Opcional: Una tecla de acceso rápido dedicada que siempre aplica post procesamiento con IA a tu transcripción."
+          },
+          "transcribe_auto": {
+            "name": "Transcribir (Auto)",
+            "description": "Elige el estilo casual, formal o código según la app en la que dictás."
+          },
+          "transcribe_casual": {
+            "name": "Transcribir (Casual)",
+            "description": "Dictá con una limpieza casual, de conversación."
+          },
+          "transcribe_formal": {
+            "name": "Transcribir (Formal)",
+            "description": "Dictá con una limpieza formal, como para un mail a un cliente."
+          },
+          "transcribe_code": {
+            "name": "Transcribir (Código)",
+            "description": "Dictá texto para código: sin comillas tipográficas ni formato automático."
+          },
+          "transcribe_edit": {
+            "name": "Modo edición",
+            "description": "Seleccioná texto, mantené la tecla y decí qué cambiar: se reescribe ahí mismo. Sin nada seleccionado, escribe lo que le pidas."
+          },
+          "voice_command": {
+            "name": "Comando de voz",
+            "description": "Mantené la tecla y decí la frase de uno de tus comandos de voz para lanzarlo."
+          },
+          "transform_polish": {
+            "name": "Transform: Polish",
+            "description": "Seleccioná texto y apretá la tecla: se reescribe ahí mismo, más claro y más corto."
+          },
+          "transform_prompt_engineer": {
+            "name": "Transform: Prompt Engineer",
+            "description": "Seleccioná texto y apretá la tecla: se reescribe ahí mismo como un prompt prolijo para una IA."
+          },
+          "transform_summarize": {
+            "name": "Transform: Summarize",
+            "description": "Seleccioná texto y apretá la tecla: se reemplaza ahí mismo por un resumen de 3 a 5 oraciones."
+          },
+          "add_selection_to_dictionary": {
+            "name": "Agregar la selección al diccionario",
+            "description": "Seleccioná una palabra o un nombre en cualquier app y apretá la tecla: se agrega a tu diccionario."
+          },
+          "transcribe_to_scratchpad": {
+            "name": "Transcribir al Scratchpad",
+            "description": "Dictá en el Scratchpad en vez de en la app que tenés adelante."
+          },
+          "hands_free_toggle": {
+            "name": "Manos libres",
+            "description": "Mientras grabás, tocala para bloquear la grabación y poder soltar. Tocala de nuevo para terminar."
           }
         },
         "errors": {
@@ -612,18 +660,12 @@
     "downloadingModel": "Descargando {{model}}...",
     "checkingUpdates": "Buscando actualizaciones...",
     "updateAvailable": "Actualización disponible: {{version}}",
-    "updateAvailableShort": "Actualización disponible",
     "upToDate": "Actualizado",
+    "checkFailed": "No se pudo buscar actualizaciones",
     "downloadUpdate": "Descargar Actualización",
     "restart": "Reiniciar",
     "updateCheckingDisabled": "Búsqueda de Actualizaciones Deshabilitada",
-    "downloading": "Descargando... {{progress}}%",
-    "installing": "Instalando...",
-    "preparing": "Preparando...",
-    "checkForUpdates": "Buscar actualizaciones",
-    "portableUpdateTitle": "Manual update required",
-    "portableUpdateMessage": "Portable installs cannot be updated automatically. To update: download the latest NSIS installer from GitHub Releases, install it to the same folder, then copy your Data/ folder (settings, models, recordings) from the old version to the new one.",
-    "portableUpdateButton": "Open GitHub Releases"
+    "checkForUpdates": "Buscar actualizaciones"
   },
   "common": {
     "loading": "Cargando...",
@@ -694,6 +736,10 @@
       "noSelection": "No hay texto seleccionado",
       "aiNotConfigured": "Falta configurar la IA",
       "aiFailed": "La IA no respondió"
+    },
+    "notices": {
+      "wordAdded": "Agregada a tu diccionario",
+      "wordKnown": "Ya estaba en tu diccionario"
     }
   },
   "app": {
@@ -795,6 +841,18 @@
       "promo": {
         "title": "Ezequielito escribe como <emphasis>vos</emphasis>.",
         "description": "Agregá los nombres propios, jerga de tu industria, marcas de clientes. Cada dictado los respeta y los corrige automáticamente aunque el modelo los haya escuchado mal."
+      },
+      "suggestions": {
+        "title": "Sugerencias",
+        "empty": "Acá aparecen sugerencias cuando el mismo nombre se corrige en dos o más dictados con limpieza.",
+        "heardAs": "Se escuchó como: {{words}}",
+        "count": "Corregida en {{count}} dictados",
+        "count_one": "Corregida en {{count}} dictado",
+        "add": "Agregar",
+        "addLabel": "Agregar {{word}} al diccionario",
+        "dismiss": "Descartar",
+        "dismissLabel": "Descartar {{word}}",
+        "failed": "No se pudo guardar. Probá de nuevo."
       },
       "sharedUnavailable": "Compartir con equipo todavía no está disponible. Sumalo en <path>Settings → Advanced</path> manualmente por ahora."
     },
@@ -910,7 +968,8 @@
       "active": "Limpieza activa",
       "paused": "Limpieza apagada",
       "notEnabled": "Esta cuenta todavía no tiene Vento Voice activado",
-      "checking": "Revisando tu cuenta..."
+      "checking": "Revisando tu cuenta...",
+      "limitReached": "Llegaste al límite de hoy. Los dictados se pegan sin limpieza hasta mañana."
     },
     "cleanup": {
       "title": "Limpiar con Vento",

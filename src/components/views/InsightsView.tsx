@@ -19,9 +19,10 @@ import {
 /**
  * Insights view.
  *
- * Pulls the last N=500 entries from the history table via
- * getHistoryEntries(null, N) and derives every number client-side with the
- * pure functions in `@/lib/insights`. Speed, time saved and the per-app
+ * Pulls every entry kept in the history table via
+ * getHistoryEntries(null, null) (a numeric limit is capped at 100 by the
+ * backend; `null` returns them all) and derives every number client-side
+ * with the pure functions in `@/lib/insights`. Speed, time saved and the per-app
  * breakdown only count entries that carry `duration_ms` / `app_name`, which
  * older entries do not have.
  */
@@ -47,7 +48,7 @@ export const InsightsView: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const result = await commands.getHistoryEntries(null, 500);
+        const result = await commands.getHistoryEntries(null, null);
         if (result.status === "ok") {
           setEntries(result.data.entries || []);
           setNow(new Date());

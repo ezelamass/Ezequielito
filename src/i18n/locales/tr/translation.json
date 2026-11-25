@@ -184,6 +184,54 @@
           "transcribe_with_post_process": {
             "name": "Son İşlem Kısayolu",
             "description": "İsteğe bağlı: Transkripsiyonunuza her zaman AI son işleme uygulayan özel bir kısayol tuşu."
+          },
+          "transcribe_auto": {
+            "name": "Transcribe (Auto)",
+            "description": "Picks the casual, formal or code style from the app you're dictating into."
+          },
+          "transcribe_casual": {
+            "name": "Transcribe (Casual)",
+            "description": "Dictate with a casual, conversational cleanup."
+          },
+          "transcribe_formal": {
+            "name": "Transcribe (Formal)",
+            "description": "Dictate with a formal cleanup, like an email to a client."
+          },
+          "transcribe_code": {
+            "name": "Transcribe (Code)",
+            "description": "Dictate text for code: no smart quotes and no automatic formatting."
+          },
+          "transcribe_edit": {
+            "name": "Edit Mode",
+            "description": "Select text, hold the key and say what to change: it is rewritten in place. With nothing selected, it writes what you ask for."
+          },
+          "voice_command": {
+            "name": "Voice Command",
+            "description": "Hold the key and say the phrase of one of your voice commands to launch it."
+          },
+          "transform_polish": {
+            "name": "Transform: Polish",
+            "description": "Select text and press the key: it is rewritten in place, clearer and more concise."
+          },
+          "transform_prompt_engineer": {
+            "name": "Transform: Prompt Engineer",
+            "description": "Select text and press the key: it is rewritten in place as a clean prompt for an AI."
+          },
+          "transform_summarize": {
+            "name": "Transform: Summarize",
+            "description": "Select text and press the key: it is replaced in place by a summary of 3 to 5 sentences."
+          },
+          "add_selection_to_dictionary": {
+            "name": "Add Selection to Dictionary",
+            "description": "Select a word or a name in any app and press the key: it is added to your dictionary."
+          },
+          "transcribe_to_scratchpad": {
+            "name": "Transcribe to Scratchpad",
+            "description": "Dictate into the Scratchpad instead of the app in front."
+          },
+          "hands_free_toggle": {
+            "name": "Hands-Free",
+            "description": "While recording, tap it to lock the recording so you can let go. Tap it again to finish."
           }
         },
         "errors": {
@@ -612,18 +660,12 @@
     "downloadingModel": "{{model}} indiriliyor...",
     "checkingUpdates": "Güncellemeler kontrol ediliyor...",
     "updateAvailable": "Güncelleme mevcut: {{version}}",
-    "updateAvailableShort": "Güncelleme mevcut",
     "upToDate": "Güncel",
+    "checkFailed": "Couldn't check for updates",
     "downloadUpdate": "Güncellemeyi İndir",
     "restart": "Yeniden Başlat",
     "updateCheckingDisabled": "Güncelleme Kontrolü Devre Dışı",
-    "downloading": "İndiriliyor... %{{progress}}",
-    "installing": "Yükleniyor...",
-    "preparing": "Hazırlanıyor...",
-    "checkForUpdates": "Güncellemeleri kontrol et",
-    "portableUpdateTitle": "Manual update required",
-    "portableUpdateMessage": "Portable installs cannot be updated automatically. To update: download the latest NSIS installer from GitHub Releases, install it to the same folder, then copy your Data/ folder (settings, models, recordings) from the old version to the new one.",
-    "portableUpdateButton": "Open GitHub Releases"
+    "checkForUpdates": "Güncellemeleri kontrol et"
   },
   "common": {
     "loading": "Yükleniyor...",
@@ -694,6 +736,10 @@
       "noSelection": "No text selected",
       "aiNotConfigured": "AI isn't set up yet",
       "aiFailed": "The AI didn't respond"
+    },
+    "notices": {
+      "wordAdded": "Added to your dictionary",
+      "wordKnown": "Already in your dictionary"
     }
   },
   "app": {
@@ -795,6 +841,18 @@
       "promo": {
         "title": "Ezequielito writes like <emphasis>you</emphasis>.",
         "description": "Add proper names, your industry's jargon, client brands. Every dictation respects them and corrects them automatically, even if the model misheard them."
+      },
+      "suggestions": {
+        "title": "Suggestions",
+        "empty": "Suggestions show up here when the same name gets corrected in two or more cleaned-up dictations.",
+        "heardAs": "Heard as: {{words}}",
+        "count": "Corrected in {{count}} dictations",
+        "count_one": "Corrected in {{count}} dictation",
+        "add": "Add",
+        "addLabel": "Add {{word}} to the dictionary",
+        "dismiss": "Dismiss",
+        "dismissLabel": "Dismiss {{word}}",
+        "failed": "Couldn't save that. Try again."
       },
       "sharedUnavailable": "Team sharing isn't available yet. For now, add it manually in <path>Settings → Advanced</path>."
     },
@@ -910,7 +968,8 @@
       "active": "Cleanup is active",
       "paused": "Cleanup is off",
       "notEnabled": "This account doesn't have Vento Voice enabled yet",
-      "checking": "Checking your account..."
+      "checking": "Checking your account...",
+      "limitReached": "Today's limit reached. Dictations are pasted without cleanup until tomorrow."
     },
     "cleanup": {
       "title": "Clean up with Vento",
