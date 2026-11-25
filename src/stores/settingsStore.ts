@@ -114,6 +114,8 @@ const settingUpdaters: {
     commands.changeSelectedLanguageSetting(value as string),
   overlay_position: (value) =>
     commands.changeOverlayPositionSetting(value as string),
+  overlay_idle_pill: (value) =>
+    commands.changeOverlayIdlePillSetting(value as boolean),
   debug_mode: (value) => commands.changeDebugModeSetting(value as boolean),
   custom_words: (value) => commands.updateCustomWords(value as string[]),
   // Ezequielito fork: snippets + voice command map + app prompt map

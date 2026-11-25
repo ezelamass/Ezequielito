@@ -12,12 +12,8 @@
 pub fn active_process_name() -> Option<String> {
     use windows::Win32::Foundation::{CloseHandle, MAX_PATH};
     use windows::Win32::System::ProcessStatus::K32GetModuleBaseNameW;
-    use windows::Win32::System::Threading::{
-        OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
-    };
-    use windows::Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, GetWindowThreadProcessId,
-    };
+    use windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+    use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
 
     unsafe {
         let hwnd = GetForegroundWindow();

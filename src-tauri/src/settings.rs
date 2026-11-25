@@ -374,6 +374,9 @@ pub struct AppSettings {
     pub selected_language: String,
     #[serde(default = "default_overlay_position")]
     pub overlay_position: OverlayPosition,
+    /// Keep a small pill on screen while idle; clicking it starts dictation.
+    #[serde(default = "default_overlay_idle_pill")]
+    pub overlay_idle_pill: bool,
     #[serde(default = "default_debug_mode")]
     pub debug_mode: bool,
     #[serde(default = "default_log_level")]
@@ -494,6 +497,12 @@ fn default_update_checks_enabled() -> bool {
 
 fn default_selected_language() -> String {
     "auto".to_string()
+}
+
+fn default_overlay_idle_pill() -> bool {
+    // Off on Linux, where the overlay itself is off by default (Wayland
+    // compositors differ too much in how they treat always-on-top windows).
+    cfg!(not(target_os = "linux"))
 }
 
 fn default_overlay_position() -> OverlayPosition {
@@ -792,20 +801,9 @@ fn ensure_post_process_defaults(settings: &mut AppSettings) -> bool {
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
 fn default_snippets() -> Vec<Snippet> {
-    vec![
-        Snippet {
-            trigger: "mi email".to_string(),
-            expansion: "ezequiellamasx@gmail.com".to_string(),
-        },
-        Snippet {
-            trigger: "mi calendly".to_string(),
-            expansion: "https://calendly.com/ezequiel-lamas".to_string(),
-        },
-        Snippet {
-            trigger: "mi firma".to_string(),
-            expansion: "Saludos,\nEzequiel Lamas\nUGC Studio".to_string(),
-        },
-    ]
+    // Ships empty: snippets are personal (email, links, signature) and each
+    // user adds their own from the Snippets view.
+    Vec::new()
 }
 
 fn default_hands_free_enabled() -> bool {
@@ -990,8 +988,9 @@ pub fn get_default_settings() -> AppSettings {
         ShortcutBinding {
             id: "transcribe_edit".to_string(),
             name: "Edit Mode".to_string(),
-            description: "Copy text first, then hold + dictate instruction. LLM rewrites and pastes."
-                .to_string(),
+            description:
+                "Copy text first, then hold + dictate instruction. LLM rewrites and pastes."
+                    .to_string(),
             default_binding: String::new(),
             current_binding: String::new(),
         },
@@ -1021,8 +1020,7 @@ pub fn get_default_settings() -> AppSettings {
         ShortcutBinding {
             id: "transcribe_to_scratchpad".to_string(),
             name: "Transcribe to Scratchpad".to_string(),
-            description: "Dictate into the Scratchpad view (not the active app)."
-                .to_string(),
+            description: "Dictate into the Scratchpad view (not the active app).".to_string(),
             default_binding: String::new(),
             current_binding: String::new(),
         },
@@ -1071,7 +1069,8 @@ pub fn get_default_settings() -> AppSettings {
         ShortcutBinding {
             id: "hands_free_toggle".to_string(),
             name: "Hands-free toggle".to_string(),
-            description: "Tap Space mid-recording to lock; tap again to stop. Wispr-style.".to_string(),
+            description: "Tap Space mid-recording to lock; tap again to stop. Wispr-style."
+                .to_string(),
             default_binding: "space".to_string(),
             current_binding: "space".to_string(),
         },
@@ -1094,6 +1093,7 @@ pub fn get_default_settings() -> AppSettings {
         translate_to_english: false,
         selected_language: "auto".to_string(),
         overlay_position: default_overlay_position(),
+        overlay_idle_pill: default_overlay_idle_pill(),
         debug_mode: false,
         log_level: default_log_level(),
         custom_words: Vec::new(),

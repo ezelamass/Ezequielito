@@ -620,6 +620,19 @@ pub fn change_overlay_position_setting(app: AppHandle, position: String) -> Resu
 
 #[tauri::command]
 #[specta::specta]
+pub fn change_overlay_idle_pill_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.overlay_idle_pill = enabled;
+    settings::write_settings(&app, settings);
+
+    // Show or hide the idle pill right away (no-op while dictating).
+    crate::utils::refresh_idle_overlay(&app);
+
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn change_debug_mode_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
     settings.debug_mode = enabled;
@@ -712,10 +725,7 @@ pub fn update_custom_words(app: AppHandle, words: Vec<String>) -> Result<(), Str
 
 #[tauri::command]
 #[specta::specta]
-pub fn update_snippets(
-    app: AppHandle,
-    snippets: Vec<settings::Snippet>,
-) -> Result<(), String> {
+pub fn update_snippets(app: AppHandle, snippets: Vec<settings::Snippet>) -> Result<(), String> {
     let mut current = settings::get_settings(&app);
     current.snippets = snippets;
     settings::write_settings(&app, current);
@@ -819,7 +829,10 @@ pub fn sync_dictionary_now(app: AppHandle) -> Result<Vec<String>, String> {
     // then any local-only entries appended.
     let mut seen: HashSet<String> = HashSet::new();
     let mut merged: Vec<String> = Vec::new();
-    for word in remote_words.into_iter().chain(current.custom_words.iter().cloned()) {
+    for word in remote_words
+        .into_iter()
+        .chain(current.custom_words.iter().cloned())
+    {
         let normalized = word.trim().to_string();
         if normalized.is_empty() {
             continue;
@@ -832,9 +845,8 @@ pub fn sync_dictionary_now(app: AppHandle) -> Result<Vec<String>, String> {
     // Ensure parent directory exists (e.g. user typed a path inside OneDrive).
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent).map_err(|e| {
-                format!("Failed to create parent dir for sync file: {}", e)
-            })?;
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create parent dir for sync file: {}", e))?;
         }
     }
 

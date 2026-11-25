@@ -14,7 +14,14 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: {
+        ...devices["Desktop Chrome"],
+        // Lets a sandbox with a preinstalled Chromium point at it; unset in
+        // CI, where `playwright install` provides the matching browser.
+        launchOptions: process.env.PW_CHROMIUM_PATH
+          ? { executablePath: process.env.PW_CHROMIUM_PATH }
+          : {},
+      },
     },
   ],
   webServer: {

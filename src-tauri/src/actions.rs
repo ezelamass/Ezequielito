@@ -6,6 +6,7 @@ use crate::audio_toolkit::{is_microphone_access_denied, is_no_input_device_error
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::history::HistoryManager;
 use crate::managers::transcription::TranscriptionManager;
+use crate::overlay::OverlayError;
 use crate::settings::{get_settings, AppSettings, Snippet, APPLE_INTELLIGENCE_PROVIDER_ID};
 use crate::shortcut;
 use crate::tray::{change_tray_icon, TrayIconState};
@@ -89,7 +90,9 @@ fn apply_snippets(text: &str, snippets: &[Snippet]) -> String {
         // Whole-word case-insensitive replace using regex
         let pattern = format!(r"(?i)\b{}\b", regex::escape(trigger));
         if let Ok(re) = regex::Regex::new(&pattern) {
-            result = re.replace_all(&result, snippet.expansion.as_str()).into_owned();
+            result = re
+                .replace_all(&result, snippet.expansion.as_str())
+                .into_owned();
         }
     }
     result
@@ -417,7 +420,10 @@ async fn process_edit_mode_request(
         .cloned()
         .unwrap_or_default();
     if model.trim().is_empty() {
-        debug!("Edit Mode skipped — provider '{}' has no model", provider.id);
+        debug!(
+            "Edit Mode skipped — provider '{}' has no model",
+            provider.id
+        );
         return None;
     }
     let api_key = settings
@@ -605,16 +611,16 @@ impl ShortcutAction for TranscribeAction {
         } else {
             // Starting failed (for example due to blocked microphone permissions).
             // Revert UI state so we don't stay stuck in the recording overlay.
-            utils::hide_recording_overlay(app);
             change_tray_icon(app, TrayIconState::Idle);
             if let Some(err) = recording_error {
-                let error_type = if is_microphone_access_denied(&err) {
-                    "microphone_permission_denied"
+                let (error_type, overlay_error) = if is_microphone_access_denied(&err) {
+                    ("microphone_permission_denied", OverlayError::MicDenied)
                 } else if is_no_input_device_error(&err) {
-                    "no_input_device"
+                    ("no_input_device", OverlayError::NoMic)
                 } else {
-                    "unknown"
+                    ("unknown", OverlayError::Generic)
                 };
+                utils::show_error_overlay(app, overlay_error);
                 let _ = app.emit(
                     "recording-error",
                     RecordingErrorEvent {
@@ -719,7 +725,7 @@ impl ShortcutAction for TranscribeAction {
 
                 if samples.is_empty() {
                     debug!("Recording produced no audio samples; skipping persistence");
-                    utils::hide_recording_overlay(&ah);
+                    utils::show_error_overlay(&ah, OverlayError::NoSpeech);
                     change_tray_icon(&ah, TrayIconState::Idle);
                 } else {
                     // Save WAV concurrently with transcription
@@ -772,14 +778,12 @@ impl ShortcutAction for TranscribeAction {
                                 show_processing_overlay(&ah);
                             }
                             // Phase 11 (rescue): auto-context wins over static override.
-                            let effective_prompt_id: Option<&str> = match (
-                                auto_resolved_prompt_id.as_deref(),
-                                prompt_id_override,
-                            ) {
-                                (Some(s), _) => Some(s),
-                                (None, Some(s)) => Some(s),
-                                _ => None,
-                            };
+                            let effective_prompt_id: Option<&str> =
+                                match (auto_resolved_prompt_id.as_deref(), prompt_id_override) {
+                                    (Some(s), _) => Some(s),
+                                    (None, Some(s)) => Some(s),
+                                    _ => None,
+                                };
                             let processed = process_transcription_output(
                                 &ah,
                                 &transcription,
@@ -805,8 +809,7 @@ impl ShortcutAction for TranscribeAction {
                             // between LLM cleanup and paste. Custom-words substitution
                             // already ran inside `transcription.rs`.
                             let snippets = get_settings(&ah).snippets;
-                            let mut final_text =
-                                apply_snippets(&processed.final_text, &snippets);
+                            let mut final_text = apply_snippets(&processed.final_text, &snippets);
 
                             // Phase 8: if Edit Mode, treat `final_text` as an
                             // instruction and rewrite the captured selection
@@ -815,12 +818,9 @@ impl ShortcutAction for TranscribeAction {
                             if edit_mode {
                                 if let Some(selection) = edit_selection.as_ref() {
                                     let settings = get_settings(&ah);
-                                    if let Some(rewritten) = process_edit_mode_request(
-                                        &settings,
-                                        selection,
-                                        &final_text,
-                                    )
-                                    .await
+                                    if let Some(rewritten) =
+                                        process_edit_mode_request(&settings, selection, &final_text)
+                                            .await
                                     {
                                         debug!(
                                             "Edit Mode rewrite: {} → {} chars",
@@ -829,7 +829,9 @@ impl ShortcutAction for TranscribeAction {
                                         );
                                         final_text = rewritten;
                                     } else {
-                                        warn!("Edit Mode: rewrite failed; pasting instruction as-is");
+                                        warn!(
+                                            "Edit Mode: rewrite failed; pasting instruction as-is"
+                                        );
                                     }
                                 } else {
                                     warn!("Edit Mode: no selection captured; pasting instruction as-is");
@@ -837,7 +839,7 @@ impl ShortcutAction for TranscribeAction {
                             }
 
                             if final_text.is_empty() {
-                                utils::hide_recording_overlay(&ah);
+                                utils::show_error_overlay(&ah, OverlayError::NoSpeech);
                                 change_tray_icon(&ah, TrayIconState::Idle);
                             } else if scratchpad {
                                 // Phase 16: send to in-app Scratchpad view
@@ -850,14 +852,20 @@ impl ShortcutAction for TranscribeAction {
                                 // the phrase up in `voice_commands` and launch.
                                 let commands = get_settings(&ah).voice_commands;
                                 match app_launcher::match_and_launch(&final_text, &commands) {
-                                    Ok(phrase) => debug!("Voice command launched: '{}'", phrase),
+                                    Ok(phrase) => {
+                                        debug!("Voice command launched: '{}'", phrase);
+                                        utils::hide_recording_overlay(&ah);
+                                    }
                                     Err(e) => {
                                         warn!("{}", e);
                                         // Emit an event so the frontend can show a toast/notification
                                         let _ = ah.emit("voice-command-miss", final_text.clone());
+                                        utils::show_error_overlay(
+                                            &ah,
+                                            OverlayError::CommandNotFound,
+                                        );
                                     }
                                 }
-                                utils::hide_recording_overlay(&ah);
                                 change_tray_icon(&ah, TrayIconState::Idle);
                             } else {
                                 let ah_clone = ah.clone();
@@ -865,16 +873,22 @@ impl ShortcutAction for TranscribeAction {
                                 let final_text_clone = final_text.clone();
                                 ah.run_on_main_thread(move || {
                                     match utils::paste(final_text_clone, ah_clone.clone()) {
-                                        Ok(()) => debug!(
-                                            "Text pasted successfully in {:?}",
-                                            paste_time.elapsed()
-                                        ),
+                                        Ok(()) => {
+                                            debug!(
+                                                "Text pasted successfully in {:?}",
+                                                paste_time.elapsed()
+                                            );
+                                            utils::hide_recording_overlay(&ah_clone);
+                                        }
                                         Err(e) => {
                                             error!("Failed to paste transcription: {}", e);
                                             let _ = ah_clone.emit("paste-error", ());
+                                            utils::show_error_overlay(
+                                                &ah_clone,
+                                                OverlayError::PasteFailed,
+                                            );
                                         }
                                     }
-                                    utils::hide_recording_overlay(&ah_clone);
                                     change_tray_icon(&ah_clone, TrayIconState::Idle);
                                 })
                                 .unwrap_or_else(|e| {
@@ -898,7 +912,7 @@ impl ShortcutAction for TranscribeAction {
                                     error!("Failed to save failed history entry: {}", save_err);
                                 }
                             }
-                            utils::hide_recording_overlay(&ah);
+                            utils::show_error_overlay(&ah, OverlayError::TranscriptionFailed);
                             change_tray_icon(&ah, TrayIconState::Idle);
                         }
                     }
