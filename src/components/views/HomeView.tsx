@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { Mic, Keyboard } from "lucide-react";
+import { Trans, useTranslation } from "react-i18next";
 import { commands } from "@/bindings";
 import { useSettings } from "../../hooks/useSettings";
+import { VentoAccount } from "../account/VentoAccount";
 
 /**
  * Phase 13 Home view — dashboard with stats and configured hotkeys.
@@ -12,6 +14,7 @@ import { useSettings } from "../../hooks/useSettings";
  * derived from the unique timestamps of dictations.
  */
 export const HomeView: React.FC = () => {
+  const { t } = useTranslation();
   const { settings } = useSettings();
   const [totalWords, setTotalWords] = useState<number>(0);
   const [recentDictations, setRecentDictations] = useState<number>(0);
@@ -20,7 +23,7 @@ export const HomeView: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const result = await commands.getHistoryEntries(null, 200);
+        const result = await commands.getHistoryEntries(null, null);
         if (result.status === "ok") {
           const entries = result.data.entries || [];
           const words = entries.reduce((sum: number, e: any) => {
@@ -38,36 +41,66 @@ export const HomeView: React.FC = () => {
     })();
   }, []);
 
+  // The name and the description stored with each binding come from the
+  // backend in English and are saved in the settings file: show the
+  // translated ones, and fall back to the stored text for an unknown id.
   const bindings = settings?.bindings || {};
   const configuredHotkeys = Object.values(bindings)
-    .filter((b: any) => b && b.current_binding && b.current_binding.trim() !== "")
+    .filter(
+      (b: any) => b && b.current_binding && b.current_binding.trim() !== "",
+    )
+    .map((b: any) => ({
+      ...b,
+      name: t(`settings.general.shortcut.bindings.${b.id}.name`, {
+        defaultValue: b.name,
+      }),
+      description: t(`settings.general.shortcut.bindings.${b.id}.description`, {
+        defaultValue: b.description,
+      }),
+    }))
     .sort((a: any, b: any) => a.name.localeCompare(b.name));
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-8 py-4">
+      <VentoAccount variant="card" />
+
       <header className="space-y-1">
-        <h1 className="font-serif italic text-5xl text-accent">Ezequielito</h1>
-        <p className="text-mid-gray text-sm">Tu dictado, tu marca, tu workflow.</p>
+        <h1 className="font-serif italic text-5xl text-ez-text">
+          {t("app.name")}
+        </h1>
+        <p className="text-mid-gray text-sm">{t("views.home.tagline")}</p>
       </header>
 
       {/* Stat cards */}
       <section className="grid grid-cols-3 gap-4">
-        <StatCard label="Palabras dictadas" value={totalWords.toLocaleString()} />
-        <StatCard label="Dictados recientes" value={recentDictations.toString()} />
-        <StatCard label="Racha" value={`${streakDays} día${streakDays === 1 ? "" : "s"}`} />
+        <StatCard
+          label={t("views.home.stats.wordsDictated")}
+          value={totalWords.toLocaleString()}
+        />
+        <StatCard
+          label={t("views.home.stats.recentDictations")}
+          value={recentDictations.toString()}
+        />
+        <StatCard
+          label={t("views.home.stats.streak")}
+          value={t("views.home.stats.streakDays", { count: streakDays })}
+        />
       </section>
 
       {/* Hotkey cheatsheet */}
       <section>
         <div className="flex items-center gap-2 mb-3">
           <Keyboard size={18} />
-          <h2 className="font-serif italic text-2xl">Tus hotkeys</h2>
+          <h2 className="font-serif italic text-2xl">
+            {t("views.home.hotkeys.title")}
+          </h2>
         </div>
         {configuredHotkeys.length === 0 ? (
           <div className="text-mid-gray text-sm border border-mid-gray/20 rounded-lg p-4">
-            No tenés hotkeys asignados todavía. Andá a{" "}
-            <span className="font-medium">Settings → General</span> para configurar
-            tu primer transcribe shortcut.
+            <Trans
+              i18nKey="views.home.hotkeys.empty"
+              components={{ path: <span className="font-medium" /> }}
+            />
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2">
@@ -92,10 +125,9 @@ export const HomeView: React.FC = () => {
       <section className="border border-accent/40 rounded-lg p-5 flex items-center gap-4 hover:border-accent/70 transition-colors">
         <Mic size={32} className="text-accent shrink-0" />
         <div className="flex-1">
-          <p className="font-medium">Para empezar a dictar</p>
+          <p className="font-medium">{t("views.home.quickStart.title")}</p>
           <p className="text-sm text-mid-gray">
-            Mantené apretado tu hotkey de transcribe y hablá. Soltá para que
-            transcriba y pegue.
+            {t("views.home.quickStart.description")}
           </p>
         </div>
       </section>

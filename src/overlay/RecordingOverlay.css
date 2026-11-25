@@ -1,19 +1,17 @@
 /*
- * Recording overlay — Ezequielito brand
+ * Recording overlay: the floating pill, in Vento's palette.
  *
- * Wispr-Flow-style floating pill. Dark, lime accent during recording,
- * warm orange when hands-free locked. Buttons are circular: X on the
- * left for cancel, ✓ on the right when locked.
- *
- * Sourced palette: --ez-bg #0a0a0a, --ez-accent #c8ff00,
- *                   --ez-warm #ff6b35, --ez-text #e8e4de
+ * Lime while recording (the action), Pistacho when hands-free is locked
+ * ("you can let go") and for notices, the error state colour for errors.
+ * Buttons are circular: ✕ on the left to cancel, ✓ on the right when locked.
  */
 
 :root {
   --ez-pill-bg: #0a0a0aee;
   --ez-pill-border: #2a2a2a;
   --ez-pill-accent: #c8ff00;
-  --ez-pill-warm: #ff6b35;
+  --ez-pill-calm: #b6e59e;
+  --ez-pill-error: #ff7a7a;
   --ez-pill-text: #e8e4de;
   --ez-pill-muted: #8a8580;
 }
@@ -51,15 +49,21 @@
 }
 
 /* Subtle lime glow + brightened border while actively recording */
-.ez-pill--visible:not(.ez-pill--processing):not(.ez-pill--locked) {
+.ez-pill--visible:not(.ez-pill--processing):not(.ez-pill--locked):not(
+    .ez-pill--error
+  ):not(.ez-pill--notice) {
   border-color: rgba(200, 255, 0, 0.22);
-  box-shadow: 0 0 0 1px rgba(200, 255, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.4);
+  box-shadow:
+    0 0 0 1px rgba(200, 255, 0, 0.06),
+    0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
-/* Hands-free locked: warm orange border to signal "you can let go now" */
+/* Hands-free locked: Pistacho border to signal "you can let go now" */
 .ez-pill--locked {
-  border-color: rgba(255, 107, 53, 0.55);
-  box-shadow: 0 0 0 1px rgba(255, 107, 53, 0.1), 0 4px 14px rgba(0, 0, 0, 0.45);
+  border-color: rgba(182, 229, 158, 0.55);
+  box-shadow:
+    0 0 0 1px rgba(182, 229, 158, 0.1),
+    0 4px 14px rgba(0, 0, 0, 0.45);
 }
 
 /* Processing: dimmer */
@@ -113,8 +117,8 @@
 }
 
 .ez-pill__btn--cancel:hover {
-  background: rgba(255, 107, 53, 0.18);
-  color: var(--ez-pill-warm);
+  background: rgba(255, 122, 122, 0.18);
+  color: var(--ez-pill-error);
 }
 
 .ez-pill__btn--confirm {
@@ -140,11 +144,13 @@
   min-height: 3px;
   background: var(--ez-pill-accent);
   border-radius: 2px;
-  transition: height 70ms ease-out, opacity 100ms ease-out;
+  transition:
+    height 70ms ease-out,
+    opacity 100ms ease-out;
 }
 
 .ez-pill--locked .ez-pill__bar {
-  background: var(--ez-pill-warm);
+  background: var(--ez-pill-calm);
 }
 
 /* Spinner during transcribing / processing — Wispr-style dot circle */
@@ -221,9 +227,9 @@
   font-size: 9px;
   font-family: "JetBrains Mono", ui-monospace, monospace;
   letter-spacing: 0.12em;
-  color: var(--ez-pill-warm);
+  color: var(--ez-pill-calm);
   background: var(--ez-pill-bg);
-  border: 1px solid rgba(255, 107, 53, 0.5);
+  border: 1px solid rgba(182, 229, 158, 0.5);
   border-radius: 999px;
   animation: ez-pill-lock-pop 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -236,6 +242,125 @@
   to {
     opacity: 1;
     transform: translate(-50%, 0) scale(1);
+  }
+}
+
+/* Error: short message, warm border */
+.ez-pill--error {
+  border-color: rgba(255, 122, 122, 0.6);
+  box-shadow:
+    0 0 0 1px rgba(255, 122, 122, 0.12),
+    0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
+/* Notice (a word was added to the dictionary): it worked, so lime, not warm */
+.ez-pill--notice {
+  border-color: color-mix(in srgb, var(--ez-pill-calm) 55%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--ez-pill-calm) 10%, transparent),
+    0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
+.ez-pill__error,
+.ez-pill__notice {
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--ez-pill-text);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+
+/*
+ * Idle pill. The window is only as big as this hover target (140×34), so
+ * the bar sits against the edge nearest the screen border and grows on
+ * hover without the window having to resize.
+ */
+.ez-idle {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+  user-select: none;
+}
+
+.ez-idle--top {
+  align-items: flex-start;
+}
+
+.ez-idle--visible {
+  opacity: 1;
+}
+
+.ez-idle__pill {
+  width: 44px;
+  height: 8px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--ez-pill-bg);
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 999px;
+  color: var(--ez-pill-text);
+  cursor: pointer;
+  transition:
+    width 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 150ms ease-out;
+  -webkit-app-region: no-drag;
+}
+
+.ez-idle__content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0;
+  white-space: nowrap;
+  transition: opacity 120ms ease-out;
+}
+
+.ez-idle__label {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.ez-idle:hover .ez-idle__pill,
+.ez-idle__pill:focus-visible {
+  width: 132px;
+  height: 28px;
+  border-color: rgba(200, 255, 0, 0.45);
+  outline: none;
+}
+
+.ez-idle:hover .ez-idle__content,
+.ez-idle__pill:focus-visible .ez-idle__content {
+  opacity: 1;
+  transition-delay: 80ms;
+}
+
+.ez-idle__pill:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ez-pill,
+  .ez-idle,
+  .ez-idle__pill,
+  .ez-idle__content {
+    transition: none;
   }
 }
 

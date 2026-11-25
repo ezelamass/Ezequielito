@@ -100,6 +100,8 @@ pub async fn retry_history_entry_transcription(
         &transcription,
         entry.post_process_requested,
         None,
+        None,
+        entry.post_process_requested,
     )
     .await;
     history_manager

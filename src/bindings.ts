@@ -93,6 +93,30 @@ async changeOverlayPositionSetting(position: string) : Promise<Result<null, stri
     else return { status: "error", error: e  as any };
 }
 },
+async changeOverlayIdlePillSetting(enabled: boolean) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_overlay_idle_pill_setting", { enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async changeContextAwarenessSetting(enabled: boolean) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_context_awareness_setting", { enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async changeVentoCleanupSetting(enabled: boolean) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_vento_cleanup_setting", { enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async changeDebugModeSetting(enabled: boolean) : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("change_debug_mode_setting", { enabled }) };
@@ -487,6 +511,26 @@ async showMainWindowCommand() : Promise<Result<null, string>> {
 async cancelOperation() : Promise<void> {
     await TAURI_INVOKE("cancel_operation");
 },
+/**
+ * Stop the active recording and transcribe it (overlay confirm button).
+ * Unlike `cancel_operation`, the audio is kept and pasted.
+ */
+async confirmRecording() : Promise<void> {
+    await TAURI_INVOKE("confirm_recording");
+},
+/**
+ * Start a hands-free dictation from the idle pill (mouse click).
+ */
+async startDictationFromOverlay() : Promise<void> {
+    await TAURI_INVOKE("start_dictation_from_overlay");
+},
+/**
+ * The overlay webview finished loading and is listening for events: put
+ * it in its resting state (idle pill or hidden).
+ */
+async overlayReady() : Promise<void> {
+    await TAURI_INVOKE("overlay_ready");
+},
 async isPortable() : Promise<boolean> {
     return await TAURI_INVOKE("is_portable");
 },
@@ -862,6 +906,92 @@ async isLaptop() : Promise<Result<boolean, string>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async ventoStatus() : Promise<Result<AccountStatus, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("vento_status") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Signs in with a Vento account. The password goes straight to Vento's
+ * auth endpoint and is never stored. Errors are stable codes
+ * (`invalid_credentials`, `network`, `server`).
+ */
+async ventoSignIn(email: string, password: string) : Promise<Result<AccountStatus, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("vento_sign_in", { email, password }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async ventoSignOut() : Promise<Result<AccountStatus, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("vento_sign_out") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Re-checks the account (feature flag) and syncs the profile now.
+ */
+async ventoRefresh() : Promise<Result<AccountStatus, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("vento_refresh") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Words suggested for the dictionary, most corrected first. Looks at the
+ * dictations kept in History that went through a cleanup.
+ */
+async getDictionarySuggestions() : Promise<Result<WordSuggestion[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_dictionary_suggestions") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Adds a suggested word to the dictionary.
+ */
+async acceptDictionarySuggestion(word: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("accept_dictionary_suggestion", { word }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Stops suggesting a word.
+ */
+async dismissDictionarySuggestion(word: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("dismiss_dictionary_suggestion", { word }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Looks for a published version newer than the one running. `None` when
+ * up to date, or when update checks are turned off.
+ */
+async checkForUpdate() : Promise<Result<AvailableUpdate | null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("check_for_update") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -880,16 +1010,46 @@ historyUpdatePayload: "history-update-payload"
 
 /** user-defined types **/
 
-export type AppSettings = { bindings: Partial<{ [key in string]: ShortcutBinding }>; push_to_talk: boolean; audio_feedback: boolean; audio_feedback_volume?: number; sound_theme?: SoundTheme; start_hidden?: boolean; autostart_enabled?: boolean; update_checks_enabled?: boolean; selected_model?: string; always_on_microphone?: boolean; selected_microphone?: string | null; clamshell_microphone?: string | null; selected_output_device?: string | null; translate_to_english?: boolean; selected_language?: string; overlay_position?: OverlayPosition; debug_mode?: boolean; log_level?: LogLevel; custom_words?: string[]; snippets?: Snippet[]; voice_commands?: Partial<{ [key in string]: string }>; hands_free_enabled?: boolean; dictionary_sync_path?: string | null; app_prompt_map?: Partial<{ [key in string]: string }>; model_unload_timeout?: ModelUnloadTimeout; word_correction_threshold?: number; history_limit?: number; recording_retention_period?: RecordingRetentionPeriod; paste_method?: PasteMethod; clipboard_handling?: ClipboardHandling; auto_submit?: boolean; auto_submit_key?: AutoSubmitKey; post_process_enabled?: boolean; post_process_provider_id?: string; post_process_providers?: PostProcessProvider[]; post_process_api_keys?: SecretMap; post_process_models?: Partial<{ [key in string]: string }>; post_process_prompts?: LLMPrompt[]; post_process_selected_prompt_id?: string | null; mute_while_recording?: boolean; append_trailing_space?: boolean; app_language?: string; experimental_enabled?: boolean; lazy_stream_close?: boolean; keyboard_implementation?: KeyboardImplementation; show_tray_icon?: boolean; paste_delay_ms?: number; typing_tool?: TypingTool; external_script_path: string | null; custom_filler_words?: string[] | null; whisper_accelerator?: WhisperAcceleratorSetting; ort_accelerator?: OrtAcceleratorSetting; whisper_gpu_device?: number; extra_recording_buffer_ms?: number }
+/**
+ * What the UI shows about the account.
+ */
+export type AccountStatus = { signed_in: boolean; email: string | null; 
+/**
+ * Whether Vento Voice is enabled for the account. `None`: not known
+ * yet (signed out, or the check has not come back).
+ */
+voice_enabled: boolean | null; 
+/**
+ * Today's cleanup allowance is used up; dictations are pasted as
+ * transcribed until tomorrow (UTC).
+ */
+limit_reached: boolean }
+export type AppSettings = { bindings: Partial<{ [key in string]: ShortcutBinding }>; push_to_talk: boolean; audio_feedback: boolean; audio_feedback_volume?: number; sound_theme?: SoundTheme; start_hidden?: boolean; autostart_enabled?: boolean; update_checks_enabled?: boolean; selected_model?: string; always_on_microphone?: boolean; selected_microphone?: string | null; clamshell_microphone?: string | null; selected_output_device?: string | null; translate_to_english?: boolean; selected_language?: string; overlay_position?: OverlayPosition; context_awareness?: boolean; dictionary_dismissed?: string[]; vento_cleanup?: boolean; overlay_idle_pill?: boolean; debug_mode?: boolean; log_level?: LogLevel; custom_words?: string[]; snippets?: Snippet[]; voice_commands?: Partial<{ [key in string]: string }>; hands_free_enabled?: boolean; dictionary_sync_path?: string | null; app_prompt_map?: Partial<{ [key in string]: string }>; model_unload_timeout?: ModelUnloadTimeout; word_correction_threshold?: number; history_limit?: number; recording_retention_period?: RecordingRetentionPeriod; paste_method?: PasteMethod; clipboard_handling?: ClipboardHandling; auto_submit?: boolean; auto_submit_key?: AutoSubmitKey; post_process_enabled?: boolean; post_process_provider_id?: string; post_process_providers?: PostProcessProvider[]; post_process_api_keys?: SecretMap; post_process_models?: Partial<{ [key in string]: string }>; post_process_prompts?: LLMPrompt[]; post_process_selected_prompt_id?: string | null; mute_while_recording?: boolean; append_trailing_space?: boolean; app_language?: string; experimental_enabled?: boolean; lazy_stream_close?: boolean; keyboard_implementation?: KeyboardImplementation; show_tray_icon?: boolean; paste_delay_ms?: number; typing_tool?: TypingTool; external_script_path: string | null; custom_filler_words?: string[] | null; whisper_accelerator?: WhisperAcceleratorSetting; ort_accelerator?: OrtAcceleratorSetting; whisper_gpu_device?: number; extra_recording_buffer_ms?: number }
 export type AudioDevice = { index: string; name: string; is_default: boolean }
 export type AutoSubmitKey = "enter" | "ctrl_enter" | "cmd_enter"
 export type AvailableAccelerators = { whisper: string[]; ort: string[]; gpu_devices: GpuDeviceOption[] }
+/**
+ * A published version newer than the one running.
+ */
+export type AvailableUpdate = { version: string; 
+/**
+ * Page with the installers and the notes for that version.
+ */
+url: string }
 export type BindingResponse = { success: boolean; binding: ShortcutBinding | null; error: string | null }
 export type ClipboardHandling = "dont_modify" | "copy_to_clipboard"
 export type CustomSounds = { start: boolean; stop: boolean }
 export type EngineType = "Whisper" | "Parakeet" | "Moonshine" | "MoonshineStreaming" | "SenseVoice" | "GigaAM" | "Canary" | "Cohere"
 export type GpuDeviceOption = { id: number; name: string; total_vram_mb: number }
-export type HistoryEntry = { id: number; file_name: string; timestamp: number; saved: boolean; title: string; transcription_text: string; post_processed_text: string | null; post_process_prompt: string | null; post_process_requested: boolean }
+export type HistoryEntry = { id: number; file_name: string; timestamp: number; saved: boolean; title: string; transcription_text: string; post_processed_text: string | null; post_process_prompt: string | null; post_process_requested: boolean; 
+/**
+ * Length of the recorded speech in milliseconds (silence removed).
+ */
+duration_ms: number | null; 
+/**
+ * App the text was dictated into, when it could be detected.
+ */
+app_name: string | null }
 export type HistoryUpdatePayload = { action: "added"; entry: HistoryEntry } | { action: "updated"; entry: HistoryEntry } | { action: "deleted"; id: number } | { action: "toggled"; id: number }
 /**
  * Result of changing keyboard implementation
@@ -919,6 +1079,19 @@ export type SoundTheme = "marimba" | "pop" | "custom"
 export type TypingTool = "auto" | "wtype" | "kwtype" | "dotool" | "ydotool" | "xdotool"
 export type WhisperAcceleratorSetting = "auto" | "cpu" | "gpu"
 export type WindowsMicrophonePermissionStatus = { supported: boolean; overall_access: PermissionAccess; device_access: PermissionAccess; app_access: PermissionAccess; desktop_app_access: PermissionAccess }
+export type WordSuggestion = { 
+/**
+ * The word as the cleanup wrote it.
+ */
+word: string; 
+/**
+ * In how many dictations it replaced something that was misheard.
+ */
+count: number; 
+/**
+ * What the speech model heard instead, most frequent first.
+ */
+heard_as: string[] }
 
 /** tauri-specta globals **/
 

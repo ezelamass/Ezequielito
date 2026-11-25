@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Check } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useSettings } from "../../hooks/useSettings";
 
 /**
@@ -21,33 +22,33 @@ type CategoryId = "personal" | "work" | "email" | "other" | "auto_cleanup";
 
 interface Category {
   id: CategoryId;
-  label: string;
+  labelKey: string; // i18n key
   apps: string[]; // lowercase exe names without .exe
-  description: string;
+  descriptionKey: string; // i18n key
 }
 
 const CATEGORIES: Category[] = [
   {
     id: "personal",
-    label: "Personal messages",
+    labelKey: "views.style.categories.personal.label",
     apps: ["whatsapp", "telegram", "signal", "discord", "messenger", "skype"],
-    description: "Aplica en mensajeros personales.",
+    descriptionKey: "views.style.categories.personal.description",
   },
   {
     id: "work",
-    label: "Work messages",
+    labelKey: "views.style.categories.work.label",
     apps: ["slack", "teams"],
-    description: "Aplica en mensajeros de trabajo.",
+    descriptionKey: "views.style.categories.work.description",
   },
   {
     id: "email",
-    label: "Email",
+    labelKey: "views.style.categories.email.label",
     apps: ["outlook", "olk", "msoutlook", "thunderbird"],
-    description: "Aplica en clientes de mail.",
+    descriptionKey: "views.style.categories.email.description",
   },
   {
     id: "other",
-    label: "Other",
+    labelKey: "views.style.categories.other.label",
     apps: [
       "claude",
       "cursor",
@@ -58,45 +59,44 @@ const CATEGORIES: Category[] = [
       "firefox",
       "edge",
     ],
-    description:
-      "Apps de productividad / browsers / IDEs. Si querés todo en code, asignalo manualmente en App Prompt Map en Advanced.",
+    descriptionKey: "views.style.categories.other.description",
   },
   {
     id: "auto_cleanup",
-    label: "Auto Cleanup",
+    labelKey: "views.style.categories.autoCleanup.label",
     apps: [],
-    description: "Limpieza automática sin LLM — próximo bundle.",
+    descriptionKey: "views.style.categories.autoCleanup.description",
   },
 ];
 
 const STYLES: Array<{
   id: StyleId;
-  title: string;
-  subtitle: string;
-  example: string;
+  titleKey: string;
+  subtitleKey: string;
+  exampleKey: string;
 }> = [
   {
     id: "ez_formal",
-    title: "Formal",
-    subtitle: "Caps + Puntuación",
-    example:
-      "Hola, ¿estás libre para almorzar mañana? Avisame si las 12 te funciona.",
+    titleKey: "views.style.styles.formal.title",
+    subtitleKey: "views.style.styles.formal.subtitle",
+    exampleKey: "views.style.styles.formal.example",
   },
   {
     id: "ez_casual",
-    title: "Casual",
-    subtitle: "Caps + Poca puntuación",
-    example: "Hola estás libre para almorzar mañana? las 12 si te funciona",
+    titleKey: "views.style.styles.casual.title",
+    subtitleKey: "views.style.styles.casual.subtitle",
+    exampleKey: "views.style.styles.casual.example",
   },
   {
     id: "ez_very_casual",
-    title: "very casual",
-    subtitle: "Sin caps + poca puntuación",
-    example: "hola estás libre para almorzar mañana? las 12 si te funciona",
+    titleKey: "views.style.styles.veryCasual.title",
+    subtitleKey: "views.style.styles.veryCasual.subtitle",
+    exampleKey: "views.style.styles.veryCasual.example",
   },
 ];
 
 export const StyleView: React.FC = () => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<CategoryId>("personal");
   const { getSetting, updateSetting, isUpdating } = useSettings();
   const map = (getSetting("app_prompt_map") || {}) as {
@@ -127,7 +127,9 @@ export const StyleView: React.FC = () => {
   return (
     <div className="w-full max-w-5xl mx-auto py-4 space-y-6">
       <header>
-        <h1 className="font-serif italic text-4xl text-ez-text">Style</h1>
+        <h1 className="font-serif italic text-4xl text-ez-text">
+          {t("sidebar.style")}
+        </h1>
       </header>
 
       {/* Tabs */}
@@ -143,10 +145,10 @@ export const StyleView: React.FC = () => {
                 : "text-mid-gray hover:text-ez-text"
             }`}
           >
-            {c.label}
+            {t(c.labelKey)}
             {c.id === "auto_cleanup" && (
               <span className="ml-2 text-xs uppercase tracking-wider font-mono text-mid-gray">
-                Beta
+                {t("views.style.beta")}
               </span>
             )}
           </button>
@@ -156,11 +158,13 @@ export const StyleView: React.FC = () => {
       {/* Header card per tab */}
       <div className="border border-mid-gray/20 rounded-xl p-5 bg-mid-gray/5">
         <h2 className="font-serif italic text-2xl mb-1">
-          {activeCategory.description.split(".")[0]}.
+          {t(activeCategory.descriptionKey).split(".")[0]}.
         </h2>
         {activeCategory.apps.length > 0 && (
           <p className="text-xs text-mid-gray font-mono mt-2">
-            Apps: {activeCategory.apps.slice(0, 10).join(" · ")}
+            {t("views.style.apps", {
+              apps: activeCategory.apps.slice(0, 10).join(" · "),
+            })}
           </p>
         )}
       </div>
@@ -169,8 +173,7 @@ export const StyleView: React.FC = () => {
       {activeTab === "auto_cleanup" ? (
         <div className="border border-dashed border-mid-gray/40 rounded-xl p-8 text-center">
           <p className="text-mid-gray text-sm">
-            Auto Cleanup todavía no está implementado. Por ahora todos los
-            dictados pasan por el LLM si tenés post-processing activo.
+            {t("views.style.autoCleanupPending")}
           </p>
         </div>
       ) : (
@@ -192,10 +195,10 @@ export const StyleView: React.FC = () => {
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="font-serif italic text-2xl text-ez-text">
-                      {s.title}
+                      {t(s.titleKey)}
                     </div>
                     <div className="text-xs text-mid-gray mt-1">
-                      {s.subtitle}
+                      {t(s.subtitleKey)}
                     </div>
                   </div>
                   {isSelected && (
@@ -203,7 +206,7 @@ export const StyleView: React.FC = () => {
                   )}
                 </div>
                 <div className="mt-5 text-sm text-mid-gray leading-relaxed border-t border-mid-gray/20 pt-3">
-                  {s.example}
+                  {t(s.exampleKey)}
                 </div>
               </button>
             );
@@ -212,9 +215,7 @@ export const StyleView: React.FC = () => {
       )}
 
       {activeStyleId === null && activeTab !== "auto_cleanup" && (
-        <p className="text-xs text-mid-gray">
-          Style mixto en este contexto. Hacé click en una card para uniformar.
-        </p>
+        <p className="text-xs text-mid-gray">{t("views.style.mixed")}</p>
       )}
     </div>
   );

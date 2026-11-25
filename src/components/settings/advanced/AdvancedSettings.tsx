@@ -8,6 +8,8 @@ import { VoiceCommands } from "../VoiceCommands";
 import { DictionarySync } from "../DictionarySync";
 import { AppPromptMapping } from "../AppPromptMapping";
 import { HandsFreeToggle } from "../HandsFreeToggle";
+import { OverlayIdlePill } from "../OverlayIdlePill";
+import { ContextAwareness } from "../ContextAwareness";
 import { SettingsGroup } from "../../ui/SettingsGroup";
 import { StartHidden } from "../StartHidden";
 import { AutostartToggle } from "../AutostartToggle";
@@ -38,6 +40,7 @@ export const AdvancedSettings: React.FC = () => {
         <AutostartToggle descriptionMode="tooltip" grouped={true} />
         <ShowTrayIcon descriptionMode="tooltip" grouped={true} />
         <ShowOverlay descriptionMode="tooltip" grouped={true} />
+        <OverlayIdlePill descriptionMode="tooltip" grouped={true} />
         <ModelUnloadTimeoutSetting descriptionMode="tooltip" grouped={true} />
         <ExperimentalToggle descriptionMode="tooltip" grouped={true} />
       </SettingsGroup>
@@ -55,8 +58,9 @@ export const AdvancedSettings: React.FC = () => {
         <AppendTrailingSpace descriptionMode="tooltip" grouped={true} />
       </SettingsGroup>
 
-      <SettingsGroup title="Ezequielito">
+      <SettingsGroup title={t("app.name")}>
         <HandsFreeToggle descriptionMode="tooltip" grouped />
+        <ContextAwareness descriptionMode="tooltip" grouped />
         <VoiceCommands descriptionMode="tooltip" grouped />
         <AppPromptMapping descriptionMode="tooltip" grouped />
         <DictionarySync descriptionMode="tooltip" grouped />

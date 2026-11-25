@@ -1,7 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Ezequielito",
-  "version": "0.1.0",
+  "productName": "Vento Voice",
+  "mainBinaryName": "vento-voice",
+  "version": "0.2.0",
   "identifier": "com.lamas.ezequielito",
   "build": {
     "beforeDevCommand": "bun run dev",
@@ -59,7 +60,8 @@
     },
     "windows": {
       "nsis": {
-        "template": "nsis/installer.nsi"
+        "template": "nsis/installer.nsi",
+        "installerIcon": "icons/icon.ico"
       }
     }
   },

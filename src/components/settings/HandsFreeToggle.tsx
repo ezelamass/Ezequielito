@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { ToggleSwitch } from "../ui/ToggleSwitch";
 import { useSettings } from "../../hooks/useSettings";
 
@@ -21,6 +22,7 @@ interface HandsFreeToggleProps {
  */
 export const HandsFreeToggle: React.FC<HandsFreeToggleProps> = React.memo(
   ({ descriptionMode = "tooltip", grouped = false }) => {
+    const { t } = useTranslation();
     const { getSetting, updateSetting, isUpdating } = useSettings();
     const enabled = getSetting("hands_free_enabled") ?? false;
 
@@ -29,8 +31,8 @@ export const HandsFreeToggle: React.FC<HandsFreeToggleProps> = React.memo(
         checked={enabled}
         onChange={(value) => updateSetting("hands_free_enabled", value)}
         isUpdating={isUpdating("hands_free_enabled")}
-        label="Hands-free (tap Space mid-recording)"
-        description="Mientras estás grabando con tu hotkey de transcribe, tap Space → recording se queda lockeado y podés soltar el hotkey. Tap Space de nuevo para parar. Útil para dictados largos sin tener que mantener teclas. Si tu hotkey de transcribe es Ctrl+Space, el guard de conflicto skipea esto automáticamente (usá Ctrl+Win u otro)."
+        label={t("settings.advanced.handsFree.title")}
+        description={t("settings.advanced.handsFree.description")}
         descriptionMode={descriptionMode}
         grouped={grouped}
       />

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { useSettings } from "../../hooks/useSettings";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
@@ -20,6 +21,7 @@ interface VoiceCommandsProps {
  */
 export const VoiceCommands: React.FC<VoiceCommandsProps> = React.memo(
   ({ descriptionMode = "tooltip", grouped = false }) => {
+    const { t } = useTranslation();
     const { getSetting, updateSetting, isUpdating } = useSettings();
     const commands = (getSetting("voice_commands") || {}) as {
       [key: string]: string;
@@ -35,7 +37,9 @@ export const VoiceCommands: React.FC<VoiceCommandsProps> = React.memo(
       if (!phrase || !target) return;
 
       if (commands[phrase]) {
-        toast.error(`Comando "${phrase}" ya existe`);
+        toast.error(
+          t("settings.ezequielito.voiceCommands.duplicate", { phrase }),
+        );
         return;
       }
       updateSetting("voice_commands", { ...commands, [phrase]: target });
@@ -52,8 +56,8 @@ export const VoiceCommands: React.FC<VoiceCommandsProps> = React.memo(
     return (
       <>
         <SettingContainer
-          title="Voice commands"
-          description="Comandos de voz para lanzar apps. Mantené el hotkey de voice command + decí la frase. Targets: URIs (claude://, whatsapp://, notion://) o exe directos (chrome.exe, calc.exe)."
+          title={t("settings.ezequielito.voiceCommands.title")}
+          description={t("settings.ezequielito.voiceCommands.description")}
           descriptionMode={descriptionMode}
           grouped={grouped}
         >
@@ -63,7 +67,9 @@ export const VoiceCommands: React.FC<VoiceCommandsProps> = React.memo(
                 type="text"
                 value={newPhrase}
                 onChange={(e) => setNewPhrase(e.target.value)}
-                placeholder="frase (ej: 'claude code')"
+                placeholder={t(
+                  "settings.ezequielito.voiceCommands.phrasePlaceholder",
+                )}
                 variant="compact"
                 className="flex-1"
                 disabled={isUpdating("voice_commands")}
@@ -72,7 +78,9 @@ export const VoiceCommands: React.FC<VoiceCommandsProps> = React.memo(
                 type="text"
                 value={newTarget}
                 onChange={(e) => setNewTarget(e.target.value)}
-                placeholder="target (ej: 'claude://')"
+                placeholder={t(
+                  "settings.ezequielito.voiceCommands.targetPlaceholder",
+                )}
                 variant="compact"
                 className="flex-1"
                 disabled={isUpdating("voice_commands")}
@@ -93,7 +101,7 @@ export const VoiceCommands: React.FC<VoiceCommandsProps> = React.memo(
                 variant="primary"
                 size="md"
               >
-                Agregar
+                {t("common.add")}
               </Button>
             </div>
           </div>
@@ -114,7 +122,10 @@ export const VoiceCommands: React.FC<VoiceCommandsProps> = React.memo(
                   {phrase}
                 </span>
                 <span className="text-mid-gray flex-shrink-0">→</span>
-                <span className="flex-1 truncate font-mono text-xs" title={target}>
+                <span
+                  className="flex-1 truncate font-mono text-xs"
+                  title={target}
+                >
                   {target}
                 </span>
                 <Button
@@ -122,7 +133,9 @@ export const VoiceCommands: React.FC<VoiceCommandsProps> = React.memo(
                   disabled={isUpdating("voice_commands")}
                   variant="secondary"
                   size="sm"
-                  aria-label={`Eliminar voice command ${phrase}`}
+                  aria-label={t("settings.ezequielito.voiceCommands.remove", {
+                    phrase,
+                  })}
                 >
                   <svg
                     className="w-3 h-3"

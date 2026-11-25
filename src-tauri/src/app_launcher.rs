@@ -10,7 +10,7 @@
 //! Mirrors the existing `std::process::Command` invocation pattern used
 //! elsewhere in `clipboard.rs` for external paste scripts.
 
-use log::{info, warn};
+use log::info;
 use std::collections::HashMap;
 use std::process::Command;
 
@@ -58,7 +58,7 @@ pub fn match_and_launch(
         launch(target)?;
         Ok(normalized)
     } else {
-        warn!("No voice command match for: '{}'", normalized);
-        Err(format!("Voice command not recognized: '{}'", normalized))
+        // What was said stays out of the log.
+        Err("Voice command not recognized".to_string())
     }
 }

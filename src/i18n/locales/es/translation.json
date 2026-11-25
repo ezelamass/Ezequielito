@@ -26,7 +26,11 @@
     "about": "Acerca de"
   },
   "onboarding": {
-    "subtitle": "Para comenzar, elige un modelo de transcripción",
+    "title": "Dictá en cualquier programa",
+    "subtitle": "Primero bajá el modelo de voz. Corre en esta compu: tu audio no sale de acá.",
+    "showOthers": "Ver otros {{count}} modelos",
+    "showOthers_one": "Ver {{count}} modelo más",
+    "hideOthers": "Ocultar los otros modelos",
     "recommended": "Recomendado",
     "download": "Descargar",
     "downloading": "Descargando...",
@@ -108,7 +112,7 @@
     },
     "permissions": {
       "title": "Permisos Requeridos",
-      "description": "Ezequielito necesita algunos permisos para funcionar correctamente.",
+      "description": "Vento Voice necesita algunos permisos para funcionar correctamente.",
       "microphone": {
         "title": "Acceso al Micrófono",
         "description": "Necesario para escuchar tu voz para la transcripción."
@@ -147,44 +151,26 @@
     "noModelDownloadRequired": "Sin Modelo - Descarga Requerida",
     "deleteModel": "Eliminar {{modelName}}",
     "downloadSpeed": "{{speed}} MB/s",
+    "cancel": "Cancelar",
+    "cancelDownload": "Cancelar descarga",
     "capabilities": {
       "languageSelection": "Soporta múltiples idiomas de entrada",
-      "multiLanguage": "Multiidioma",
-      "translation": "Puede traducir al inglés",
-      "translate": "Traducir al inglés",
       "singleLanguage": "Solo admite este idioma",
-      "languageOnly": "Solo {{language}}"
-    },
-    "cancel": "Cancelar",
-    "cancelDownload": "Cancelar descarga"
+      "multiLanguage": "Multiidioma",
+      "languageOnly": "Solo {{language}}",
+      "translation": "Puede traducir al inglés",
+      "translate": "Traducir al inglés"
+    }
   },
   "settings": {
     "modelSettings": {
       "title": "Configuración de {{model}}",
       "noSettingsNeeded": "Este modelo funciona automáticamente sin necesidad de configuración."
     },
-    "models": {
-      "title": "Modelos de Transcripción",
-      "description": "Selecciona un modelo de transcripción o descarga modelos adicionales. Diferentes modelos ofrecen distintos niveles de precisión y velocidad.",
-      "downloaded": "Descargados",
-      "available": "Disponibles para Descargar",
-      "deleteConfirm": "¿Estás seguro de que deseas eliminar {{modelName}}? Necesitarás descargarlo de nuevo para usarlo.",
-      "deleteActiveConfirm": "{{modelName}} es tu modelo activo. Eliminarlo detendrá las transcripciones hasta que selecciones un nuevo modelo. ¿Estás seguro?",
-      "deleteTitle": "Eliminar modelo",
-      "filters": {
-        "all": "Todos",
-        "multiLanguage": "Multiidioma",
-        "translation": "Traducción",
-        "allLanguages": "Todos los idiomas"
-      },
-      "noModelsMatch": "Ningún modelo coincide con este filtro.",
-      "yourModels": "Modelos descargados",
-      "availableModels": "Disponibles para descargar"
-    },
     "general": {
       "title": "General",
       "shortcut": {
-        "title": "Atajos de Ezequielito",
+        "title": "Atajos de Vento Voice",
         "description": "Configura atajos de teclado para activar la grabación de voz a texto",
         "loading": "Cargando atajos...",
         "none": "No hay atajos configurados",
@@ -202,6 +188,54 @@
           "transcribe_with_post_process": {
             "name": "Tecla de Post Procesamiento",
             "description": "Opcional: Una tecla de acceso rápido dedicada que siempre aplica post procesamiento con IA a tu transcripción."
+          },
+          "transcribe_auto": {
+            "name": "Transcribir (Auto)",
+            "description": "Elige el estilo casual, formal o código según la app en la que dictás."
+          },
+          "transcribe_casual": {
+            "name": "Transcribir (Casual)",
+            "description": "Dictá con una limpieza casual, de conversación."
+          },
+          "transcribe_formal": {
+            "name": "Transcribir (Formal)",
+            "description": "Dictá con una limpieza formal, como para un mail a un cliente."
+          },
+          "transcribe_code": {
+            "name": "Transcribir (Código)",
+            "description": "Dictá texto para código: sin comillas tipográficas ni formato automático."
+          },
+          "transcribe_edit": {
+            "name": "Modo edición",
+            "description": "Seleccioná texto, mantené la tecla y decí qué cambiar: se reescribe ahí mismo. Sin nada seleccionado, escribe lo que le pidas."
+          },
+          "voice_command": {
+            "name": "Comando de voz",
+            "description": "Mantené la tecla y decí la frase de uno de tus comandos de voz para lanzarlo."
+          },
+          "transform_polish": {
+            "name": "Transform: Polish",
+            "description": "Seleccioná texto y apretá la tecla: se reescribe ahí mismo, más claro y más corto."
+          },
+          "transform_prompt_engineer": {
+            "name": "Transform: Prompt Engineer",
+            "description": "Seleccioná texto y apretá la tecla: se reescribe ahí mismo como un prompt prolijo para una IA."
+          },
+          "transform_summarize": {
+            "name": "Transform: Summarize",
+            "description": "Seleccioná texto y apretá la tecla: se reemplaza ahí mismo por un resumen de 3 a 5 oraciones."
+          },
+          "add_selection_to_dictionary": {
+            "name": "Agregar la selección al diccionario",
+            "description": "Seleccioná una palabra o un nombre en cualquier app y apretá la tecla: se agrega a tu diccionario."
+          },
+          "transcribe_to_scratchpad": {
+            "name": "Transcribir al Scratchpad",
+            "description": "Dictá en el Scratchpad en vez de en la app que tenés adelante."
+          },
+          "hands_free_toggle": {
+            "name": "Manos libres",
+            "description": "Mientras grabás, tocala para bloquear la grabación y poder soltar. Tocala de nuevo para terminar."
           }
         },
         "errors": {
@@ -222,6 +256,24 @@
         "label": "Presionar para Hablar",
         "description": "Mantén presionado para grabar, suelta para detener"
       }
+    },
+    "models": {
+      "title": "Modelos de Transcripción",
+      "description": "Selecciona un modelo de transcripción o descarga modelos adicionales. Diferentes modelos ofrecen distintos niveles de precisión y velocidad.",
+      "yourModels": "Modelos descargados",
+      "availableModels": "Disponibles para descargar",
+      "downloaded": "Descargados",
+      "available": "Disponibles para Descargar",
+      "deleteConfirm": "¿Estás seguro de que deseas eliminar {{modelName}}? Necesitarás descargarlo de nuevo para usarlo.",
+      "deleteActiveConfirm": "{{modelName}} es tu modelo activo. Eliminarlo detendrá las transcripciones hasta que selecciones un nuevo modelo. ¿Estás seguro?",
+      "deleteTitle": "Eliminar modelo",
+      "filters": {
+        "all": "Todos",
+        "multiLanguage": "Multiidioma",
+        "translation": "Traducción",
+        "allLanguages": "Todos los idiomas"
+      },
+      "noModelsMatch": "Ningún modelo coincide con este filtro."
     },
     "sound": {
       "title": "Sonido",
@@ -284,11 +336,11 @@
       },
       "autostart": {
         "label": "Iniciar al Arranque",
-        "description": "Iniciar Ezequielito automáticamente cuando inicies sesión en tu computadora."
+        "description": "Iniciar Vento Voice automáticamente cuando inicies sesión en tu computadora."
       },
       "showTrayIcon": {
         "label": "Mostrar Icono de Bandeja",
-        "description": "Mostrar el icono de Ezequielito en la bandeja del sistema."
+        "description": "Mostrar el icono de Vento Voice en la bandeja del sistema."
       },
       "overlay": {
         "title": "Posición de Superposición",
@@ -364,6 +416,18 @@
         "add": "Agregar",
         "remove": "Eliminar {{word}}",
         "duplicate": "\"{{word}}\" ya existe"
+      },
+      "overlayIdlePill": {
+        "title": "Píldora siempre visible",
+        "description": "Deja una píldora chica en pantalla cuando no estás dictando. Pasá el mouse para ver tu tecla y hacé clic para empezar a dictar."
+      },
+      "handsFree": {
+        "title": "Manos libres (tocá Espacio mientras grabás)",
+        "description": "Mientras mantenés tu tecla de dictado, tocá Espacio para bloquear la grabación: podés soltar y seguir hablando. Tocá Espacio de nuevo, o el ✓ de la píldora, para terminar. Si tu tecla ya usa Espacio (Ctrl+Espacio), esto se saltea solo; elegí otra tecla para usarlo."
+      },
+      "contextAwareness": {
+        "title": "Usar la app como contexto",
+        "description": "Cuando se limpia un dictado, le dice a la IA en qué app y en qué ventana va el texto, para que ajuste el tono y escriba bien los nombres que aparecen en pantalla. Apagalo para que los nombres de apps y los títulos de ventana no salgan de esta computadora."
       }
     },
     "postProcessing": {
@@ -453,7 +517,7 @@
       },
       "updateChecks": {
         "label": "Buscar Actualizaciones",
-        "description": "Buscar automáticamente nuevas versiones de Ezequielito"
+        "description": "Buscar automáticamente nuevas versiones de Vento Voice"
       },
       "soundTheme": {
         "label": "Tema de Sonido",
@@ -521,29 +585,78 @@
       "title": "Acerca de",
       "version": {
         "title": "Versión",
-        "description": "Versión actual de Ezequielito"
+        "description": "Versión actual de Vento Voice"
       },
       "appDataDirectory": {
         "title": "Directorio de Datos de la Aplicación",
-        "description": "Ubicación donde Ezequielito almacena sus datos"
+        "description": "Ubicación donde Vento Voice almacena sus datos"
       },
       "sourceCode": {
         "title": "Código Fuente",
-        "description": "Ver código fuente y contribuir",
+        "description": "Ver el código fuente",
         "button": "Ver en GitHub"
-      },
-      "supportDevelopment": {
-        "title": "Apoyar el Desarrollo",
-        "description": "Ayúdanos a continuar construyendo Ezequielito",
-        "button": "Donar"
       },
       "acknowledgments": {
         "title": "Reconocimientos",
         "whisper": {
           "title": "Whisper.cpp",
           "description": "Inferencia de alto rendimiento del modelo de reconocimiento automático de voz Whisper de OpenAI",
-          "details": "Ezequielito usa Whisper.cpp para procesamiento de voz a texto rápido y local. Gracias al increíble trabajo de Georgi Gerganov y colaboradores."
+          "details": "Vento Voice usa Whisper.cpp para procesamiento de voz a texto rápido y local. Gracias al increíble trabajo de Georgi Gerganov y colaboradores."
+        },
+        "handy": {
+          "title": "Handy",
+          "description": "La app de dictado de código abierto sobre la que está hecho Vento Voice",
+          "details": "Vento Voice nació de Handy, de CJ Pais y colaboradores, publicado bajo licencia MIT. La grabación, la transcripción local y mucho de lo que hace confiable al dictado vienen de ese trabajo. Vento Voice es un producto aparte y no está afiliado a Handy ni cuenta con su aval."
         }
+      }
+    },
+    "ezequielito": {
+      "appPromptMapping": {
+        "title": "Mapeo App → Prompt (modo Auto)",
+        "description": "Cuando usás el hotkey 'Transcribe (Auto)', el sistema detecta la app en foreground y rutea al prompt mapeado acá. Apps no listadas usan Casual por default.",
+        "appPlaceholder": "exe name (ej: 'cursor', 'outlook')",
+        "prompts": {
+          "casual": "Casual",
+          "formal": "Formal",
+          "code": "Code"
+        },
+        "duplicate": "Mapping para \"{{app}}\" ya existe",
+        "remove": "Eliminar mapping {{app}}"
+      },
+      "dictionarySync": {
+        "title": "Sync del diccionario",
+        "description": "Sincronizá tu custom_words con un archivo JSON en OneDrive / Dropbox / Google Drive. El servicio de cloud se encarga de propagar entre dispositivos.",
+        "pathPlaceholder": "C:\\Users\\…\\OneDrive\\ezequielito-dictionary.json",
+        "browse": "Examinar",
+        "syncing": "Sincronizando...",
+        "syncNow": "Sincronizar ahora",
+        "disable": "Desactivar",
+        "active": "Sync activo: {{path}}",
+        "pathSaved": "Ruta de sync del diccionario guardada",
+        "disabled": "Sync del diccionario desactivado",
+        "error": "Error: {{error}}",
+        "noPath": "Configurá una ruta de sync primero",
+        "syncOk": "Sync OK — {{count}} palabras",
+        "syncOk_one": "Sync OK — {{count}} palabra",
+        "syncFailed": "Sync falló: {{error}}",
+        "syncError": "Error de sync: {{error}}"
+      },
+      "snippets": {
+        "title": "Snippets",
+        "description": "Voice triggers que se expanden a texto. Ej: decí 'mi email' y se pega tu dirección completa. Match case-insensitive de palabra completa.",
+        "triggerPlaceholder": "trigger (ej: 'mi email')",
+        "expansionPlaceholder": "expansion (texto a pegar)",
+        "duplicate": "Snippet \"{{trigger}}\" ya existe",
+        "tooLong": "Trigger ≤ 80 chars, expansión ≤ 2000 chars",
+        "remove": "Eliminar snippet {{trigger}}"
+      },
+      "voiceCommands": {
+        "title": "Comandos de voz",
+        "description": "Comandos de voz para lanzar apps. Mantené el hotkey de voice command + decí la frase. Targets: URIs (claude://, whatsapp://, notion://) o exe directos (chrome.exe, calc.exe).",
+        "phrasePlaceholder": "frase (ej: 'claude code')",
+        "targetPlaceholder": "target (ej: 'claude://')",
+        "duplicate": "Comando \"{{phrase}}\" ya existe",
+        "remove": "Eliminar voice command {{phrase}}"
       }
     }
   },
@@ -551,18 +664,12 @@
     "downloadingModel": "Descargando {{model}}...",
     "checkingUpdates": "Buscando actualizaciones...",
     "updateAvailable": "Actualización disponible: {{version}}",
-    "updateAvailableShort": "Actualización disponible",
     "upToDate": "Actualizado",
+    "checkFailed": "No se pudo buscar actualizaciones",
     "downloadUpdate": "Descargar Actualización",
     "restart": "Reiniciar",
     "updateCheckingDisabled": "Búsqueda de Actualizaciones Deshabilitada",
-    "downloading": "Descargando... {{progress}}%",
-    "installing": "Instalando...",
-    "preparing": "Preparando...",
-    "checkForUpdates": "Buscar actualizaciones",
-    "portableUpdateTitle": "Manual update required",
-    "portableUpdateMessage": "Portable installs cannot be updated automatically. To update: download the latest NSIS installer from GitHub Releases, install it to the same folder, then copy your Data/ folder (settings, models, recordings) from the old version to the new one.",
-    "portableUpdateButton": "Open GitHub Releases"
+    "checkForUpdates": "Buscar actualizaciones"
   },
   "common": {
     "loading": "Cargando...",
@@ -588,7 +695,7 @@
   },
   "accessibility": {
     "permissionsRequired": "Se Requieren Permisos de Accesibilidad",
-    "permissionsDescription": "Ezequielito necesita permisos de accesibilidad para escribir texto transcrito.",
+    "permissionsDescription": "Vento Voice necesita permisos de accesibilidad para escribir texto transcrito.",
     "openSettings": "Abrir Ajustes del Sistema",
     "dismiss": "Descartar"
   },
@@ -611,10 +718,279 @@
   },
   "appLanguage": {
     "title": "Idioma de la aplicación",
-    "description": "Cambia el idioma de la interfaz de Ezequielito"
+    "description": "Cambia el idioma de la interfaz de Vento Voice"
   },
   "overlay": {
     "transcribing": "Transcribiendo...",
-    "processing": "Procesando..."
+    "processing": "Procesando...",
+    "cancel": "Cancelar",
+    "confirm": "Terminar y pegar",
+    "handsFree": "MANOS LIBRES",
+    "idle": {
+      "start": "Empezar a dictar"
+    },
+    "errors": {
+      "micDenied": "El micrófono está bloqueado",
+      "noMic": "No hay micrófono",
+      "noSpeech": "No se escuchó nada",
+      "transcriptionFailed": "No se pudo transcribir",
+      "pasteFailed": "No se pudo pegar el texto",
+      "commandNotFound": "Ningún comando coincide",
+      "generic": "Algo salió mal",
+      "noSelection": "No hay texto seleccionado",
+      "aiNotConfigured": "Falta configurar la IA",
+      "aiFailed": "La IA no respondió"
+    },
+    "notices": {
+      "wordAdded": "Agregada a tu diccionario",
+      "wordKnown": "Ya estaba en tu diccionario"
+    }
+  },
+  "app": {
+    "name": "Vento Voice"
+  },
+  "views": {
+    "home": {
+      "tagline": "Tu dictado, tu marca, tu workflow.",
+      "stats": {
+        "wordsDictated": "Palabras dictadas",
+        "recentDictations": "Dictados recientes",
+        "streak": "Racha",
+        "streakDays": "{{count}} días",
+        "streakDays_one": "{{count}} día"
+      },
+      "hotkeys": {
+        "title": "Tus hotkeys",
+        "empty": "No tenés hotkeys asignados todavía. Andá a <path>Settings → General</path> para configurar tu primer transcribe shortcut."
+      },
+      "quickStart": {
+        "title": "Para empezar a dictar",
+        "description": "Mantené apretado tu hotkey de transcribe y hablá. Soltá para que transcriba y pegue."
+      }
+    },
+    "insights": {
+      "tabs": {
+        "usage": "Tu uso",
+        "voice": "Tu voz"
+      },
+      "loading": "Cargando stats...",
+      "stats": {
+        "wordsDictated": "Palabras dictadas",
+        "wordsChange": "{{change}}% este mes",
+        "totalDictations": "Dictados totales",
+        "thisWeek": "{{count}} esta semana",
+        "streak": "Racha",
+        "currentStreak": "Racha actual",
+        "streakDays": "{{count}} días",
+        "streakDays_one": "{{count}} día",
+        "longestStreak": "Más larga: {{count}} días",
+        "longestStreak_one": "Más larga: {{count}} día"
+      },
+      "speed": {
+        "label": "Palabras por minuto",
+        "note": "Tipeando, el promedio ronda las {{wpm}}"
+      },
+      "timeSaved": {
+        "label": "Tiempo ahorrado",
+        "minutes": "{{minutes}} min",
+        "hours": "{{hours}} h",
+        "hoursMinutes": "{{hours}} h {{minutes}} min",
+        "note": "Comparado con tipear a {{wpm}} palabras por minuto"
+      },
+      "notEnoughData": {
+        "title": "Todavía no hay datos suficientes",
+        "description": "Aparece después de unos {{seconds}} segundos de dictado."
+      },
+      "calendar": {
+        "noStreak": "Sin racha activa",
+        "streakTitle": "{{count}} días de racha",
+        "streakTitle_one": "{{count}} día de racha",
+        "bestStreak": "Mejor racha · {{count}} días",
+        "bestStreak_one": "Mejor racha · {{count}} día",
+        "less": "Menos",
+        "more": "Más",
+        "weekdays": {
+          "monday": "L",
+          "tuesday": "M",
+          "wednesday": "M",
+          "thursday": "J",
+          "friday": "V",
+          "saturday": "S",
+          "sunday": "D"
+        },
+        "dayTooltip": "{{date}} · {{count}} dictados",
+        "dayTooltip_one": "{{date}} · {{count}} dictado"
+      },
+      "apps": {
+        "title": "Por app",
+        "words": "{{formatted}} palabras",
+        "words_one": "{{formatted}} palabra",
+        "other": "Otras",
+        "empty": "Todavía no hay apps. Se va completando a medida que dictás.",
+        "untracked": "{{count}} dictados sin app registrada",
+        "untracked_one": "{{count}} dictado sin app registrada"
+      },
+      "voice": {
+        "title": "Analítica de voz",
+        "description": "Acento detectado, velocidad de habla, idiomas más usados. Requiere instrumentación adicional del recorder. Próximo bundle."
+      },
+      "comingSoon": "Próximamente"
+    },
+    "dictionary": {
+      "tabs": {
+        "all": "Todos",
+        "personal": "Personal",
+        "shared": "Compartido con el equipo"
+      },
+      "promo": {
+        "title": "Vento Voice escribe como <emphasis>vos</emphasis>.",
+        "description": "Agregá los nombres propios, jerga de tu industria, marcas de clientes. Cada dictado los respeta y los corrige automáticamente aunque el modelo los haya escuchado mal."
+      },
+      "suggestions": {
+        "title": "Sugerencias",
+        "empty": "Acá aparecen sugerencias cuando el mismo nombre se corrige en dos o más dictados con limpieza.",
+        "heardAs": "Se escuchó como: {{words}}",
+        "count": "Corregida en {{count}} dictados",
+        "count_one": "Corregida en {{count}} dictado",
+        "add": "Agregar",
+        "addLabel": "Agregar {{word}} al diccionario",
+        "dismiss": "Descartar",
+        "dismissLabel": "Descartar {{word}}",
+        "failed": "No se pudo guardar. Probá de nuevo."
+      },
+      "sharedUnavailable": "Compartir con equipo todavía no está disponible. Sumalo en <path>Settings → Advanced</path> manualmente por ahora."
+    },
+    "snippets": {
+      "tabs": {
+        "all": "Todos",
+        "personal": "Personal",
+        "shared": "Compartido con el equipo"
+      },
+      "promo": {
+        "title": "Lo que <emphasis>vos</emphasis> no tenés que re-escribir.",
+        "description": "Guardá cualquier cosa que tipeás seguido — tu email, un intro, un prompt — y decí una palabra o frase para reemplazarlo en el lugar."
+      },
+      "sharedUnavailable": "Compartir con equipo todavía no está disponible."
+    },
+    "style": {
+      "categories": {
+        "personal": {
+          "label": "Mensajes personales",
+          "description": "Aplica en mensajeros personales."
+        },
+        "work": {
+          "label": "Mensajes de trabajo",
+          "description": "Aplica en mensajeros de trabajo."
+        },
+        "email": {
+          "label": "Email",
+          "description": "Aplica en clientes de mail."
+        },
+        "other": {
+          "label": "Otros",
+          "description": "Apps de productividad / browsers / IDEs. Si querés todo en code, asignalo manualmente en App Prompt Map en Advanced."
+        },
+        "autoCleanup": {
+          "label": "Auto Cleanup",
+          "description": "Limpieza automática sin LLM — próximo bundle."
+        }
+      },
+      "beta": "Beta",
+      "apps": "Apps: {{apps}}",
+      "autoCleanupPending": "Auto Cleanup todavía no está implementado. Por ahora todos los dictados pasan por el LLM si tenés post-processing activo.",
+      "styles": {
+        "formal": {
+          "title": "Formal",
+          "subtitle": "Caps + Puntuación",
+          "example": "Hola, ¿estás libre para almorzar mañana? Avisame si las 12 te funciona."
+        },
+        "casual": {
+          "title": "Casual",
+          "subtitle": "Caps + Poca puntuación",
+          "example": "Hola estás libre para almorzar mañana? las 12 si te funciona"
+        },
+        "veryCasual": {
+          "title": "very casual",
+          "subtitle": "Sin caps + poca puntuación",
+          "example": "hola estás libre para almorzar mañana? las 12 si te funciona"
+        }
+      },
+      "mixed": "Style mixto en este contexto. Hacé click en una card para uniformar."
+    },
+    "transforms": {
+      "beta": "Beta",
+      "intro": {
+        "title": "Transform funciona en cualquier app",
+        "description": "Seleccioná texto en cualquier ventana y apretá la tecla del transform: al soltarla, el texto se reescribe ahí mismo."
+      },
+      "builtin": {
+        "polish": {
+          "name": "Polish",
+          "description": "Mejora claridad y concisión sin cambiar el significado."
+        },
+        "promptEngineer": {
+          "name": "Prompt Engineer",
+          "description": "Reescribe el texto como un prompt LLM estructurado."
+        },
+        "summarize": {
+          "name": "Summarize",
+          "description": "Resumen en 3-5 oraciones, mismo idioma."
+        }
+      },
+      "unassigned": "Sin asignar",
+      "assignHint": "Para asignar hotkeys: Settings → General → grupo “Vento Voice”."
+    },
+    "scratchpad": {
+      "description": "Editor libre. Asigná un hotkey a <binding>Transcribe to Scratchpad</binding> en Settings → General para dictar directo acá.",
+      "noHotkey": "Sin hotkey asignado",
+      "placeholder": "Empezá a escribir o dictá acá usando el hotkey de Transcribe to Scratchpad...",
+      "wordCount": "{{count}} palabras",
+      "wordCount_one": "{{count}} palabra",
+      "charCount": "{{count}} caracteres",
+      "charCount_one": "{{count}} carácter",
+      "copyAll": "Copiar todo",
+      "clear": "Borrar",
+      "hint": "El contenido persiste localmente entre sesiones. Las dictadas se agregan al final separadas por un salto de línea. Para enviar texto a otra app, usá Copiar todo y pegá afuera.",
+      "appended": "Texto agregado al Scratchpad",
+      "copied": "Copiado al portapapeles",
+      "copyFailed": "No se pudo copiar",
+      "confirmClear": "¿Borrar todo el contenido del Scratchpad? Esta acción no se puede deshacer."
+    }
+  },
+  "account": {
+    "section": "Cuenta",
+    "title": "Cuenta de Vento",
+    "signIn": {
+      "description": "Iniciá sesión con tu cuenta de Vento y tus dictados salen limpios (sin muletillas, con las correcciones resueltas y con puntuación), sin cargar ninguna API key.",
+      "email": "Mail",
+      "password": "Contraseña",
+      "submit": "Iniciar sesión",
+      "submitting": "Iniciando sesión..."
+    },
+    "signOut": "Cerrar sesión",
+    "status": {
+      "active": "Limpieza activa",
+      "paused": "Limpieza apagada",
+      "notEnabled": "Esta cuenta todavía no tiene Vento Voice activado",
+      "checking": "Revisando tu cuenta...",
+      "limitReached": "Llegaste al límite de hoy. Los dictados se pegan sin limpieza hasta mañana."
+    },
+    "cleanup": {
+      "title": "Limpiar con Vento",
+      "description": "Con la sesión iniciada, Vento limpia cada dictado antes de pegarlo. Apagalo para pegar el texto tal como se transcribió."
+    },
+    "sync": {
+      "title": "Diccionario, snippets y estilos",
+      "description": "Tu diccionario, tus snippets y tus estilos por app te siguen de una computadora a otra con tu cuenta.",
+      "button": "Sincronizar ahora",
+      "syncing": "Sincronizando...",
+      "success": "Todo sincronizado"
+    },
+    "errors": {
+      "invalidCredentials": "Mail o contraseña incorrectos.",
+      "network": "Sin conexión. Revisá tu internet y probá de nuevo.",
+      "notSignedIn": "Se cerró tu sesión. Iniciá sesión de nuevo.",
+      "generic": "Vento tuvo un problema. Probá de nuevo en un rato."
+    }
   }
 }

@@ -16,6 +16,7 @@ mod tauri_impl;
 use log::{error, info, warn};
 use serde::Serialize;
 use specta::Type;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_autostart::ManagerExt;
 
@@ -56,22 +57,87 @@ pub fn init_shortcuts(app: &AppHandle) {
     }
 }
 
+/// A shortcut that only exists while a recording is in progress (Escape to
+/// cancel, the hands-free key).
+///
+/// Start and stop each ask for a state and spawn a task to apply it. Those
+/// tasks can run in either order: after a very short recording the
+/// "unregister" could run before the "register", leaving the key captured
+/// system-wide until the app quit. So start/stop only record what is wanted
+/// (`requested`), and every task applies the latest request, whichever
+/// scheduled it. The mutex also serialises those passes.
+struct DynamicShortcut {
+    #[cfg_attr(target_os = "linux", allow(dead_code))]
+    binding_id: &'static str,
+    requested: AtomicBool,
+    #[cfg_attr(target_os = "linux", allow(dead_code))]
+    registered: std::sync::Mutex<bool>,
+}
+
+impl DynamicShortcut {
+    const fn new(binding_id: &'static str) -> Self {
+        Self {
+            binding_id,
+            requested: AtomicBool::new(false),
+            registered: std::sync::Mutex::new(false),
+        }
+    }
+
+    /// Records the wanted state and applies it off the calling thread
+    /// (start/stop run on the shortcut handler, which must not block on
+    /// registration).
+    fn request(&'static self, app: &AppHandle, wanted: bool) {
+        self.requested.store(wanted, Ordering::SeqCst);
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            self.reconcile(&app);
+        });
+    }
+
+    fn reconcile(&self, app: &AppHandle) {
+        // Dynamic registration is unstable on Linux: these shortcuts are
+        // never registered there.
+        #[cfg(target_os = "linux")]
+        {
+            let _ = app;
+        }
+
+        #[cfg(not(target_os = "linux"))]
+        {
+            let mut registered = self.registered.lock().unwrap_or_else(|e| e.into_inner());
+            let requested = self.requested.load(Ordering::SeqCst);
+            if requested == *registered {
+                return;
+            }
+            let Some(binding) = get_settings(app).bindings.get(self.binding_id).cloned() else {
+                return;
+            };
+            if requested {
+                match register_shortcut(app, binding) {
+                    Ok(()) => *registered = true,
+                    Err(e) => error!("Failed to register '{}' shortcut: {}", self.binding_id, e),
+                }
+            } else {
+                match unregister_shortcut(app, binding) {
+                    Ok(()) => *registered = false,
+                    Err(e) => error!("Failed to unregister '{}' shortcut: {}", self.binding_id, e),
+                }
+            }
+        }
+    }
+}
+
+static CANCEL_SHORTCUT: DynamicShortcut = DynamicShortcut::new("cancel");
+static HANDS_FREE_SHORTCUT: DynamicShortcut = DynamicShortcut::new("hands_free_toggle");
+
 /// Register the cancel shortcut (called when recording starts)
 pub fn register_cancel_shortcut(app: &AppHandle) {
-    let settings = get_settings(app);
-    match settings.keyboard_implementation {
-        KeyboardImplementation::Tauri => tauri_impl::register_cancel_shortcut(app),
-        KeyboardImplementation::HandyKeys => handy_keys::register_cancel_shortcut(app),
-    }
+    CANCEL_SHORTCUT.request(app, true);
 }
 
 /// Unregister the cancel shortcut (called when recording stops)
 pub fn unregister_cancel_shortcut(app: &AppHandle) {
-    let settings = get_settings(app);
-    match settings.keyboard_implementation {
-        KeyboardImplementation::Tauri => tauri_impl::unregister_cancel_shortcut(app),
-        KeyboardImplementation::HandyKeys => handy_keys::unregister_cancel_shortcut(app),
-    }
+    CANCEL_SHORTCUT.request(app, false);
 }
 
 /// Phase 6: register the hands-free toggle shortcut (Space). Called when
@@ -120,20 +186,13 @@ pub fn register_hands_free_shortcut(app: &AppHandle) {
             }
         }
     }
-    match settings.keyboard_implementation {
-        KeyboardImplementation::Tauri => tauri_impl::register_hands_free_shortcut(app),
-        KeyboardImplementation::HandyKeys => handy_keys::register_hands_free_shortcut(app),
-    }
+    HANDS_FREE_SHORTCUT.request(app, true);
 }
 
 /// Phase 6: unregister the hands-free toggle shortcut (Space). Called when
 /// recording stops.
 pub fn unregister_hands_free_shortcut(app: &AppHandle) {
-    let settings = get_settings(app);
-    match settings.keyboard_implementation {
-        KeyboardImplementation::Tauri => tauri_impl::unregister_hands_free_shortcut(app),
-        KeyboardImplementation::HandyKeys => handy_keys::unregister_hands_free_shortcut(app),
-    }
+    HANDS_FREE_SHORTCUT.request(app, false);
 }
 
 /// Register a shortcut using the appropriate implementation
@@ -620,6 +679,37 @@ pub fn change_overlay_position_setting(app: AppHandle, position: String) -> Resu
 
 #[tauri::command]
 #[specta::specta]
+pub fn change_vento_cleanup_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.vento_cleanup = enabled;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_context_awareness_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.context_awareness = enabled;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_overlay_idle_pill_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.overlay_idle_pill = enabled;
+    settings::write_settings(&app, settings);
+
+    // Show or hide the idle pill right away (no-op while dictating).
+    crate::utils::refresh_idle_overlay(&app);
+
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn change_debug_mode_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
     settings.debug_mode = enabled;
@@ -707,18 +797,17 @@ pub fn update_custom_words(app: AppHandle, words: Vec<String>) -> Result<(), Str
     let mut settings = settings::get_settings(&app);
     settings.custom_words = words;
     settings::write_settings(&app, settings);
+    crate::commands::vento::profile_changed(&app);
     Ok(())
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn update_snippets(
-    app: AppHandle,
-    snippets: Vec<settings::Snippet>,
-) -> Result<(), String> {
+pub fn update_snippets(app: AppHandle, snippets: Vec<settings::Snippet>) -> Result<(), String> {
     let mut current = settings::get_settings(&app);
     current.snippets = snippets;
     settings::write_settings(&app, current);
+    crate::commands::vento::profile_changed(&app);
     Ok(())
 }
 
@@ -773,6 +862,7 @@ pub fn update_app_prompt_map(
     let mut current = settings::get_settings(&app);
     current.app_prompt_map = map;
     settings::write_settings(&app, current);
+    crate::commands::vento::profile_changed(&app);
     Ok(())
 }
 
@@ -819,7 +909,10 @@ pub fn sync_dictionary_now(app: AppHandle) -> Result<Vec<String>, String> {
     // then any local-only entries appended.
     let mut seen: HashSet<String> = HashSet::new();
     let mut merged: Vec<String> = Vec::new();
-    for word in remote_words.into_iter().chain(current.custom_words.iter().cloned()) {
+    for word in remote_words
+        .into_iter()
+        .chain(current.custom_words.iter().cloned())
+    {
         let normalized = word.trim().to_string();
         if normalized.is_empty() {
             continue;
@@ -832,9 +925,8 @@ pub fn sync_dictionary_now(app: AppHandle) -> Result<Vec<String>, String> {
     // Ensure parent directory exists (e.g. user typed a path inside OneDrive).
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent).map_err(|e| {
-                format!("Failed to create parent dir for sync file: {}", e)
-            })?;
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create parent dir for sync file: {}", e))?;
         }
     }
 
@@ -845,6 +937,7 @@ pub fn sync_dictionary_now(app: AppHandle) -> Result<Vec<String>, String> {
 
     current.custom_words = merged.clone();
     settings::write_settings(&app, current);
+    crate::commands::vento::profile_changed(&app);
     Ok(merged)
 }
 

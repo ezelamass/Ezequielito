@@ -1,6 +1,9 @@
 use crate::input;
 use crate::settings;
 use crate::settings::OverlayPosition;
+use std::sync::mpsc::{self, RecvTimeoutError, Sender};
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize};
 
 #[cfg(not(target_os = "macos"))]
@@ -35,6 +38,72 @@ tauri_panel! {
 // ~6px below it, so the window needs ~64px of vertical room.
 const OVERLAY_WIDTH: f64 = 280.0;
 const OVERLAY_HEIGHT: f64 = 64.0;
+
+// Idle pill: the window shrinks to the hover target so the transparent
+// area around it does not swallow clicks meant for the app underneath.
+const OVERLAY_IDLE_WIDTH: f64 = 140.0;
+const OVERLAY_IDLE_HEIGHT: f64 = 34.0;
+
+/// How long an error stays on the pill before it returns to idle/hidden.
+const OVERLAY_ERROR_MS: u64 = 2600;
+
+/// Time the webview gets to play its fade-out before the window is
+/// shrunk (idle pill) or hidden.
+const OVERLAY_SETTLE_MS: u64 = 300;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OverlaySize {
+    Idle,
+    Active,
+}
+
+impl OverlaySize {
+    fn dimensions(self) -> (f64, f64) {
+        match self {
+            OverlaySize::Idle => (OVERLAY_IDLE_WIDTH, OVERLAY_IDLE_HEIGHT),
+            OverlaySize::Active => (OVERLAY_WIDTH, OVERLAY_HEIGHT),
+        }
+    }
+}
+
+/// Machine-readable reasons shown on the pill; the overlay maps each to a
+/// translated message.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OverlayError {
+    MicDenied,
+    NoMic,
+    NoSpeech,
+    TranscriptionFailed,
+    PasteFailed,
+    CommandNotFound,
+    NoSelection,
+    AiNotConfigured,
+    AiFailed,
+    /// Not a failure: the selected word went into the dictionary.
+    WordAdded,
+    /// The selected word was already in the dictionary.
+    WordKnown,
+    Generic,
+}
+
+impl OverlayError {
+    pub fn code(self) -> &'static str {
+        match self {
+            OverlayError::MicDenied => "mic_denied",
+            OverlayError::NoMic => "no_mic",
+            OverlayError::NoSpeech => "no_speech",
+            OverlayError::TranscriptionFailed => "transcription_failed",
+            OverlayError::PasteFailed => "paste_failed",
+            OverlayError::CommandNotFound => "command_not_found",
+            OverlayError::NoSelection => "no_selection",
+            OverlayError::AiNotConfigured => "ai_not_configured",
+            OverlayError::AiFailed => "ai_failed",
+            OverlayError::WordAdded => "word_added",
+            OverlayError::WordKnown => "word_known",
+            OverlayError::Generic => "generic",
+        }
+    }
+}
 
 #[cfg(target_os = "macos")]
 const OVERLAY_TOP_OFFSET: f64 = 46.0;
@@ -202,7 +271,8 @@ fn is_mouse_within_monitor(
 /// We must use LogicalPosition (not PhysicalPosition) because Tauri/tao
 /// converts PhysicalPosition using the scale factor of the monitor the window
 /// is *currently* on, which is wrong when moving cross-monitor.
-fn calculate_overlay_position(app_handle: &AppHandle) -> Option<(f64, f64)> {
+fn calculate_overlay_position(app_handle: &AppHandle, size: OverlaySize) -> Option<(f64, f64)> {
+    let (width, height) = size.dimensions();
     let monitor = get_monitor_with_cursor(app_handle)?;
     let scale = monitor.scale_factor();
     let monitor_x = monitor.position().x as f64 / scale;
@@ -212,11 +282,11 @@ fn calculate_overlay_position(app_handle: &AppHandle) -> Option<(f64, f64)> {
 
     let settings = settings::get_settings(app_handle);
 
-    let x = monitor_x + (monitor_width - OVERLAY_WIDTH) / 2.0;
+    let x = monitor_x + (monitor_width - width) / 2.0;
     let y = match settings.overlay_position {
         OverlayPosition::Top => monitor_y + OVERLAY_TOP_OFFSET,
         OverlayPosition::Bottom | OverlayPosition::None => {
-            monitor_y + monitor_height - OVERLAY_HEIGHT - OVERLAY_BOTTOM_OFFSET
+            monitor_y + monitor_height - height - OVERLAY_BOTTOM_OFFSET
         }
     };
 
@@ -230,7 +300,7 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
     // for Layer Shell as we use anchors. On other platforms, we require a monitor.
     #[cfg(not(target_os = "linux"))]
     {
-        let position = calculate_overlay_position(app_handle);
+        let position = calculate_overlay_position(app_handle, OverlaySize::Active);
         if position.is_none() {
             debug!("Failed to determine overlay position, not creating overlay window");
             return;
@@ -258,6 +328,14 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
     .transparent(true)
     .focused(false)
     .visible(false);
+
+    // A click on the pill must not take keyboard focus away from the app the
+    // text is going to be pasted into. The window system keeps this as a
+    // window flag (WS_EX_NOACTIVATE), so it survives every show/hide.
+    #[cfg(target_os = "windows")]
+    {
+        builder = builder.focusable(false);
+    }
 
     if let Some(data_dir) = crate::portable::data_dir() {
         builder = builder.data_directory(data_dir.join("webview"));
@@ -287,7 +365,7 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
 /// Creates the recording overlay panel and keeps it hidden by default (macOS)
 #[cfg(target_os = "macos")]
 pub fn create_recording_overlay(app_handle: &AppHandle) {
-    if let Some((x, y)) = calculate_overlay_position(app_handle) {
+    if let Some((x, y)) = calculate_overlay_position(app_handle, OverlaySize::Active) {
         // PanelBuilder creates a Tauri window then converts it to NSPanel.
         // The window remains registered, so get_webview_window() still works.
         match PanelBuilder::<_, RecordingOverlayPanel>::new(app_handle, "recording_overlay")
@@ -321,70 +399,307 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
     }
 }
 
-fn show_overlay_state(app_handle: &AppHandle, state: &str) {
-    // Check if overlay should be shown based on position setting
-    let settings = settings::get_settings(app_handle);
-    if settings.overlay_position == OverlayPosition::None {
-        return;
-    }
-
-    update_overlay_position(app_handle);
-
-    if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
-        let _ = overlay_window.show();
-
-        // On Windows, aggressively re-assert "topmost" in the native Z-order after showing
-        #[cfg(target_os = "windows")]
-        force_overlay_topmost(&overlay_window);
-
-        let _ = overlay_window.emit("show-overlay", state);
-    }
-}
-
-/// Shows the recording overlay window with fade-in animation
-pub fn show_recording_overlay(app_handle: &AppHandle) {
-    show_overlay_state(app_handle, "recording");
-}
-
-/// Shows the transcribing overlay window
-pub fn show_transcribing_overlay(app_handle: &AppHandle) {
-    show_overlay_state(app_handle, "transcribing");
-}
-
-/// Shows the processing overlay window
-pub fn show_processing_overlay(app_handle: &AppHandle) {
-    show_overlay_state(app_handle, "processing");
-}
-
-/// Updates the overlay window position based on current settings
-pub fn update_overlay_position(app_handle: &AppHandle) {
+/// Resizes and repositions the overlay window for the given size.
+fn apply_overlay_geometry(app_handle: &AppHandle, size: OverlaySize) {
     if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
         #[cfg(target_os = "linux")]
         {
             update_gtk_layer_shell_anchors(&overlay_window);
         }
 
-        if let Some((x, y)) = calculate_overlay_position(app_handle) {
+        let (width, height) = size.dimensions();
+        let _ = overlay_window.set_size(tauri::Size::Logical(tauri::LogicalSize { width, height }));
+
+        if let Some((x, y)) = calculate_overlay_position(app_handle, size) {
             let _ = overlay_window
                 .set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
         }
     }
 }
 
-/// Hides the recording overlay window with fade-out animation
-pub fn hide_recording_overlay(app_handle: &AppHandle) {
-    // Always hide the overlay regardless of settings - if setting was changed while recording,
-    // we still want to hide it properly
-    if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
-        // Emit event to trigger fade-out animation
-        let _ = overlay_window.emit("hide-overlay", ());
-        // Hide the window after a short delay to allow animation to complete
-        let window_clone = overlay_window.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(300));
-            let _ = window_clone.hide();
-        });
+// ---------------------------------------------------------------------------
+// Pill state machine
+//
+// Every overlay transition goes through one thread (`overlay_tx`), so a
+// delayed step (shrink after the fade-out, dismissing an error) can never
+// land on top of a newer state. The decisions live in `Pill::step`, which
+// is pure: it takes an input plus the relevant settings and returns the
+// effects to perform and the timer to arm.
+// ---------------------------------------------------------------------------
+
+/// What the settings currently allow.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PillEnv {
+    /// Overlay position is not "None".
+    overlay_on: bool,
+    /// "Always-visible pill" is enabled.
+    idle_pill: bool,
+}
+
+impl PillEnv {
+    fn shows_idle(self) -> bool {
+        self.overlay_on && self.idle_pill
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PillInput {
+    /// A live state: "recording" | "transcribing" | "processing".
+    Show(&'static str),
+    /// A failure to show briefly.
+    Error(OverlayError),
+    /// The live state ended; go back to rest.
+    Settle,
+    /// Settings changed or the webview just loaded; re-apply the rest state.
+    Refresh,
+    /// The armed timer elapsed.
+    TimerFired,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PillTimer {
+    /// The fade-out finished: shrink to the idle pill, or hide the window.
+    FinishSettle { idle: bool },
+    /// The error has been on screen long enough.
+    DismissError,
+}
+
+impl PillTimer {
+    fn delay(self) -> Duration {
+        match self {
+            PillTimer::FinishSettle { .. } => Duration::from_millis(OVERLAY_SETTLE_MS),
+            PillTimer::DismissError => Duration::from_millis(OVERLAY_ERROR_MS),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PillEffect {
+    Resize(OverlaySize),
+    ShowWindow,
+    HideWindow,
+    /// `show-overlay` with this state.
+    EmitState(&'static str),
+    /// `overlay-error` with this code.
+    EmitError(&'static str),
+    /// `hide-overlay`.
+    EmitHide,
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct Pill {
+    /// A live state (recording / transcribing / processing / error) is on
+    /// screen, as opposed to resting (idle pill or hidden).
+    active: bool,
+    timer: Option<PillTimer>,
+    /// Counts every time a timer is armed, so the thread can tell "a new
+    /// timer of the same kind" from "the old one is still pending".
+    armed: u64,
+}
+
+impl Pill {
+    fn step(&mut self, input: PillInput, env: PillEnv) -> Vec<PillEffect> {
+        match input {
+            PillInput::Show(state) => {
+                if !env.overlay_on {
+                    return Vec::new();
+                }
+                self.active = true;
+                self.timer = None;
+                vec![
+                    PillEffect::Resize(OverlaySize::Active),
+                    PillEffect::ShowWindow,
+                    PillEffect::EmitState(state),
+                ]
+            }
+            PillInput::Error(error) => {
+                if !env.overlay_on {
+                    // Nothing to show the error on; still leave the live state.
+                    return self.settle(env);
+                }
+                self.active = true;
+                self.arm(PillTimer::DismissError);
+                vec![
+                    PillEffect::Resize(OverlaySize::Active),
+                    PillEffect::ShowWindow,
+                    PillEffect::EmitError(error.code()),
+                    PillEffect::EmitState("error"),
+                ]
+            }
+            PillInput::Settle => self.settle(env),
+            PillInput::Refresh => {
+                if self.active {
+                    // Only the position can have changed; keep the state.
+                    return if env.overlay_on {
+                        vec![PillEffect::Resize(OverlaySize::Active)]
+                    } else {
+                        Vec::new()
+                    };
+                }
+                self.timer = None;
+                if env.shows_idle() {
+                    vec![
+                        PillEffect::Resize(OverlaySize::Idle),
+                        PillEffect::ShowWindow,
+                        PillEffect::EmitState("idle"),
+                    ]
+                } else {
+                    vec![PillEffect::EmitHide, PillEffect::HideWindow]
+                }
+            }
+            PillInput::TimerFired => match self.timer.take() {
+                Some(PillTimer::FinishSettle { idle: true }) => {
+                    vec![PillEffect::Resize(OverlaySize::Idle)]
+                }
+                Some(PillTimer::FinishSettle { idle: false }) => vec![PillEffect::HideWindow],
+                Some(PillTimer::DismissError) => self.settle(env),
+                None => Vec::new(),
+            },
+        }
+    }
+
+    fn arm(&mut self, timer: PillTimer) {
+        self.timer = Some(timer);
+        self.armed += 1;
+    }
+
+    /// Leaves the live state. The webview is told first so its animation
+    /// runs; the window itself is resized or hidden when the timer fires.
+    fn settle(&mut self, env: PillEnv) -> Vec<PillEffect> {
+        self.active = false;
+        let idle = env.shows_idle();
+        self.arm(PillTimer::FinishSettle { idle });
+        if idle {
+            vec![PillEffect::EmitState("idle")]
+        } else {
+            vec![PillEffect::EmitHide]
+        }
+    }
+}
+
+fn pill_env(app_handle: &AppHandle) -> PillEnv {
+    let settings = settings::get_settings(app_handle);
+    PillEnv {
+        overlay_on: settings.overlay_position != OverlayPosition::None,
+        idle_pill: settings.overlay_idle_pill,
+    }
+}
+
+fn perform(app_handle: &AppHandle, effect: PillEffect) {
+    let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") else {
+        return;
+    };
+    match effect {
+        PillEffect::Resize(size) => apply_overlay_geometry(app_handle, size),
+        PillEffect::ShowWindow => {
+            let _ = overlay_window.show();
+            // On Windows, aggressively re-assert "topmost" in the native Z-order after showing
+            #[cfg(target_os = "windows")]
+            force_overlay_topmost(&overlay_window);
+        }
+        PillEffect::HideWindow => {
+            let _ = overlay_window.hide();
+        }
+        PillEffect::EmitState(state) => {
+            let _ = overlay_window.emit("show-overlay", state);
+        }
+        PillEffect::EmitError(code) => {
+            let _ = overlay_window.emit("overlay-error", code);
+        }
+        PillEffect::EmitHide => {
+            let _ = overlay_window.emit("hide-overlay", ());
+        }
+    }
+}
+
+static OVERLAY_TX: OnceLock<Sender<PillInput>> = OnceLock::new();
+
+/// Sender to the pill thread, started on first use.
+fn overlay_tx(app_handle: &AppHandle) -> &'static Sender<PillInput> {
+    OVERLAY_TX.get_or_init(|| {
+        let (tx, rx) = mpsc::channel::<PillInput>();
+        let app = app_handle.clone();
+        std::thread::spawn(move || {
+            let mut pill = Pill::default();
+            let mut deadline: Option<Instant> = None;
+            loop {
+                let input = match deadline {
+                    Some(at) => {
+                        match rx.recv_timeout(at.saturating_duration_since(Instant::now())) {
+                            Ok(input) => input,
+                            Err(RecvTimeoutError::Timeout) => PillInput::TimerFired,
+                            Err(RecvTimeoutError::Disconnected) => break,
+                        }
+                    }
+                    None => match rx.recv() {
+                        Ok(input) => input,
+                        Err(_) => break,
+                    },
+                };
+
+                let armed_before = pill.armed;
+                for effect in pill.step(input, pill_env(&app)) {
+                    perform(&app, effect);
+                }
+                // Start the clock only for a timer armed by this step; one
+                // left pending by an unrelated input keeps its deadline.
+                match pill.timer {
+                    None => deadline = None,
+                    Some(timer) if pill.armed != armed_before => {
+                        deadline = Some(Instant::now() + timer.delay());
+                    }
+                    Some(_) => {}
+                }
+            }
+        });
+        tx
+    })
+}
+
+fn send_pill(app_handle: &AppHandle, input: PillInput) {
+    if overlay_tx(app_handle).send(input).is_err() {
+        log::warn!("Overlay thread is gone; dropping {:?}", input);
+    }
+}
+
+/// Shows the recording overlay window with fade-in animation
+pub fn show_recording_overlay(app_handle: &AppHandle) {
+    send_pill(app_handle, PillInput::Show("recording"));
+}
+
+/// Shows the transcribing overlay window
+pub fn show_transcribing_overlay(app_handle: &AppHandle) {
+    send_pill(app_handle, PillInput::Show("transcribing"));
+}
+
+/// Shows the processing overlay window
+pub fn show_processing_overlay(app_handle: &AppHandle) {
+    send_pill(app_handle, PillInput::Show("processing"));
+}
+
+/// Shows a short error on the pill, then returns to idle (or hides).
+///
+/// Call this instead of `hide_recording_overlay` on a failure path. With the
+/// overlay disabled it just ends the live state; the existing events
+/// (`recording-error`, `paste-error`) still reach the main window.
+pub fn show_error_overlay(app_handle: &AppHandle, error: OverlayError) {
+    send_pill(app_handle, PillInput::Error(error));
+}
+
+/// Re-applies the overlay position after the setting changed.
+pub fn update_overlay_position(app_handle: &AppHandle) {
+    send_pill(app_handle, PillInput::Refresh);
+}
+
+/// Puts the overlay in its resting state: the idle pill when the setting is
+/// on, hidden otherwise. While a live state is showing it only repositions.
+pub fn refresh_idle_overlay(app_handle: &AppHandle) {
+    send_pill(app_handle, PillInput::Refresh);
+}
+
+/// Ends the live state: back to the idle pill, or hidden when it is off.
+pub fn hide_recording_overlay(app_handle: &AppHandle) {
+    send_pill(app_handle, PillInput::Settle);
 }
 
 pub fn emit_levels(app_handle: &AppHandle, levels: &Vec<f32>) {
@@ -394,5 +709,186 @@ pub fn emit_levels(app_handle: &AppHandle, levels: &Vec<f32>) {
     // also emit to the recording overlay if it's open
     if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
         let _ = overlay_window.emit("mic-level", levels);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const ON: PillEnv = PillEnv {
+        overlay_on: true,
+        idle_pill: true,
+    };
+    const NO_IDLE: PillEnv = PillEnv {
+        overlay_on: true,
+        idle_pill: false,
+    };
+    const OFF: PillEnv = PillEnv {
+        overlay_on: false,
+        idle_pill: true,
+    };
+
+    #[test]
+    fn recording_grows_the_window_before_announcing_the_state() {
+        let mut pill = Pill::default();
+        assert_eq!(
+            pill.step(PillInput::Show("recording"), ON),
+            vec![
+                PillEffect::Resize(OverlaySize::Active),
+                PillEffect::ShowWindow,
+                PillEffect::EmitState("recording"),
+            ]
+        );
+        assert!(pill.active);
+        assert_eq!(pill.timer, None);
+    }
+
+    #[test]
+    fn settling_with_the_idle_pill_shrinks_only_after_the_fade() {
+        let mut pill = Pill::default();
+        pill.step(PillInput::Show("recording"), ON);
+
+        assert_eq!(
+            pill.step(PillInput::Settle, ON),
+            vec![PillEffect::EmitState("idle")]
+        );
+        assert!(!pill.active);
+        assert_eq!(pill.timer, Some(PillTimer::FinishSettle { idle: true }));
+
+        assert_eq!(
+            pill.step(PillInput::TimerFired, ON),
+            vec![PillEffect::Resize(OverlaySize::Idle)]
+        );
+        assert_eq!(pill.timer, None);
+    }
+
+    #[test]
+    fn settling_without_the_idle_pill_hides_the_window() {
+        let mut pill = Pill::default();
+        pill.step(PillInput::Show("recording"), NO_IDLE);
+
+        assert_eq!(
+            pill.step(PillInput::Settle, NO_IDLE),
+            vec![PillEffect::EmitHide]
+        );
+        assert_eq!(
+            pill.step(PillInput::TimerFired, NO_IDLE),
+            vec![PillEffect::HideWindow]
+        );
+    }
+
+    #[test]
+    fn a_new_recording_cancels_the_pending_shrink() {
+        let mut pill = Pill::default();
+        pill.step(PillInput::Show("recording"), ON);
+        pill.step(PillInput::Settle, ON);
+
+        pill.step(PillInput::Show("recording"), ON);
+        assert_eq!(pill.timer, None);
+        // A late timer must not touch the live recording.
+        assert_eq!(pill.step(PillInput::TimerFired, ON), Vec::new());
+        assert!(pill.active);
+    }
+
+    #[test]
+    fn an_error_shows_then_dismisses_itself_back_to_idle() {
+        let mut pill = Pill::default();
+        assert_eq!(
+            pill.step(PillInput::Error(OverlayError::NoSpeech), ON),
+            vec![
+                PillEffect::Resize(OverlaySize::Active),
+                PillEffect::ShowWindow,
+                PillEffect::EmitError("no_speech"),
+                PillEffect::EmitState("error"),
+            ]
+        );
+        assert_eq!(pill.timer, Some(PillTimer::DismissError));
+
+        assert_eq!(
+            pill.step(PillInput::TimerFired, ON),
+            vec![PillEffect::EmitState("idle")]
+        );
+        assert_eq!(pill.timer, Some(PillTimer::FinishSettle { idle: true }));
+    }
+
+    #[test]
+    fn a_new_recording_cancels_the_error_dismissal() {
+        let mut pill = Pill::default();
+        pill.step(PillInput::Error(OverlayError::PasteFailed), ON);
+        pill.step(PillInput::Show("recording"), ON);
+
+        assert_eq!(pill.step(PillInput::TimerFired, ON), Vec::new());
+        assert!(pill.active);
+    }
+
+    #[test]
+    fn an_error_with_the_overlay_turned_off_still_leaves_the_live_state() {
+        // Overlay was on when recording started, then set to "None".
+        let mut pill = Pill::default();
+        pill.step(PillInput::Show("recording"), ON);
+
+        assert_eq!(
+            pill.step(PillInput::Error(OverlayError::NoSpeech), OFF),
+            vec![PillEffect::EmitHide]
+        );
+        assert!(!pill.active);
+        assert_eq!(
+            pill.step(PillInput::TimerFired, OFF),
+            vec![PillEffect::HideWindow]
+        );
+    }
+
+    #[test]
+    fn nothing_is_shown_while_the_overlay_is_off() {
+        let mut pill = Pill::default();
+        assert_eq!(pill.step(PillInput::Show("recording"), OFF), Vec::new());
+        assert!(!pill.active);
+        assert_eq!(
+            pill.step(PillInput::Refresh, OFF),
+            vec![PillEffect::EmitHide, PillEffect::HideWindow]
+        );
+    }
+
+    #[test]
+    fn refresh_at_rest_applies_the_idle_pill_setting() {
+        let mut pill = Pill::default();
+        assert_eq!(
+            pill.step(PillInput::Refresh, ON),
+            vec![
+                PillEffect::Resize(OverlaySize::Idle),
+                PillEffect::ShowWindow,
+                PillEffect::EmitState("idle"),
+            ]
+        );
+        assert_eq!(
+            pill.step(PillInput::Refresh, NO_IDLE),
+            vec![PillEffect::EmitHide, PillEffect::HideWindow]
+        );
+    }
+
+    #[test]
+    fn refresh_at_rest_cancels_a_pending_hide() {
+        // Dictation ended with the pill off, then the user turned it on
+        // before the delayed hide ran.
+        let mut pill = Pill::default();
+        pill.step(PillInput::Show("recording"), NO_IDLE);
+        pill.step(PillInput::Settle, NO_IDLE);
+
+        pill.step(PillInput::Refresh, ON);
+        assert_eq!(pill.timer, None);
+        assert_eq!(pill.step(PillInput::TimerFired, ON), Vec::new());
+    }
+
+    #[test]
+    fn refresh_while_recording_only_repositions() {
+        let mut pill = Pill::default();
+        pill.step(PillInput::Show("recording"), ON);
+
+        assert_eq!(
+            pill.step(PillInput::Refresh, ON),
+            vec![PillEffect::Resize(OverlaySize::Active)]
+        );
+        assert!(pill.active);
     }
 }

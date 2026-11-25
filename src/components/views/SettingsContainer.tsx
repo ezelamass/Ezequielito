@@ -1,9 +1,18 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Cog, FlaskConical, History, Info, Sparkles, Cpu } from "lucide-react";
-import HandyHand from "../icons/HandyHand";
+import {
+  Cog,
+  FlaskConical,
+  History,
+  Info,
+  Sparkles,
+  Cpu,
+  User,
+} from "lucide-react";
+import VentoMark from "../icons/VentoMark";
 import { useSettings } from "../../hooks/useSettings";
 import {
+  AccountSettings,
   GeneralSettings,
   AdvancedSettings,
   HistorySettings,
@@ -23,6 +32,7 @@ import {
  */
 
 type SubSection =
+  | "account"
   | "general"
   | "models"
   | "advanced"
@@ -41,9 +51,16 @@ interface SubSectionConfig {
 
 const SUB_SECTIONS: SubSectionConfig[] = [
   {
+    id: "account",
+    labelKey: "account.section",
+    icon: User,
+    component: AccountSettings,
+    enabled: () => true,
+  },
+  {
     id: "general",
     labelKey: "sidebar.general",
-    icon: HandyHand,
+    icon: VentoMark,
     component: GeneralSettings,
     enabled: () => true,
   },
@@ -97,8 +114,8 @@ export const SettingsContainer: React.FC = () => {
   const [active, setActive] = useState<SubSection>("general");
 
   const available = SUB_SECTIONS.filter((s) => s.enabled(settings));
-  const Active = available.find((s) => s.id === active)?.component
-    ?? GeneralSettings;
+  const Active =
+    available.find((s) => s.id === active)?.component ?? GeneralSettings;
 
   return (
     <div className="w-full max-w-5xl flex gap-6">

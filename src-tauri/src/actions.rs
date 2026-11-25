@@ -1,17 +1,25 @@
+use crate::active_window::ActiveApp;
 use crate::app_launcher;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 use crate::apple_intelligence;
+use crate::assist::{self, AssistError, AssistRequest};
 use crate::audio_feedback::{play_feedback_sound, play_feedback_sound_blocking, SoundType};
+use crate::audio_toolkit::constants::WHISPER_SAMPLE_RATE;
 use crate::audio_toolkit::{is_microphone_access_denied, is_no_input_device_error};
+use crate::learn;
 use crate::managers::audio::AudioRecordingManager;
-use crate::managers::history::HistoryManager;
+use crate::managers::history::{DictationMeta, HistoryManager};
 use crate::managers::transcription::TranscriptionManager;
+use crate::overlay::OverlayError;
+use crate::selection::{self, Selection};
 use crate::settings::{get_settings, AppSettings, Snippet, APPLE_INTELLIGENCE_PROVIDER_ID};
 use crate::shortcut;
 use crate::tray::{change_tray_icon, TrayIconState};
 use crate::utils::{
     self, show_processing_overlay, show_recording_overlay, show_transcribing_overlay,
 };
+use crate::vento::{VentoAccount, VentoError, VoiceRequest};
+use crate::vento_sync::style_for_prompt;
 use crate::TranscriptionCoordinator;
 use ferrous_opencc::{config::BuiltinConfig, OpenCC};
 use log::{debug, error, warn};
@@ -89,7 +97,9 @@ fn apply_snippets(text: &str, snippets: &[Snippet]) -> String {
         // Whole-word case-insensitive replace using regex
         let pattern = format!(r"(?i)\b{}\b", regex::escape(trigger));
         if let Ok(re) = regex::Regex::new(&pattern) {
-            result = re.replace_all(&result, snippet.expansion.as_str()).into_owned();
+            result = re
+                .replace_all(&result, snippet.expansion.as_str())
+                .into_owned();
         }
     }
     result
@@ -113,6 +123,7 @@ async fn post_process_transcription(
     settings: &AppSettings,
     transcription: &str,
     prompt_id_override: Option<&str>,
+    context: Option<&ActiveApp>,
 ) -> Option<String> {
     let provider = match settings.active_post_process_provider().cloned() {
         Some(provider) => provider,
@@ -168,6 +179,13 @@ async fn post_process_transcription(
         debug!("Post-processing skipped because the selected prompt is empty");
         return None;
     }
+
+    // Tell the model where the text is going. It goes in front of the
+    // prompt so `${output}` stays last in legacy mode.
+    let prompt = match context.filter(|_| settings.context_awareness) {
+        Some(app) => format!("{}\n\n{}", app.context_note(), prompt),
+        None => prompt,
+    };
 
     debug!(
         "Starting LLM post-processing with provider '{}' (model: {})",
@@ -399,83 +417,34 @@ pub(crate) struct ProcessedTranscription {
     pub final_text: String,
     pub post_processed_text: Option<String>,
     pub post_process_prompt: Option<String>,
+    /// A cleanup was asked for, whether or not it produced text. Stored
+    /// with the entry so a retry from History tries again.
+    pub cleanup_requested: bool,
 }
 
-/// Phase 8 (Edit Mode): Given a clipboard selection and a spoken instruction,
-/// send both to the configured post-process LLM and return the rewritten text.
-/// Falls back to `None` (caller pastes the raw instruction or skips) if
-/// post-processing isn't configured.
-async fn process_edit_mode_request(
-    settings: &AppSettings,
-    selection: &str,
-    instruction: &str,
-) -> Option<String> {
-    let provider = settings.active_post_process_provider().cloned()?;
-    let model = settings
-        .post_process_models
-        .get(&provider.id)
-        .cloned()
-        .unwrap_or_default();
-    if model.trim().is_empty() {
-        debug!("Edit Mode skipped — provider '{}' has no model", provider.id);
-        return None;
-    }
-    let api_key = settings
-        .post_process_api_keys
-        .get(&provider.id)
-        .cloned()
-        .unwrap_or_default();
+/// Longest a dictation waits for the Vento cleanup, token refresh
+/// included, before it is pasted as transcribed.
+const VENTO_CLEANUP_DEADLINE: std::time::Duration = std::time::Duration::from_secs(6);
 
-    // Disable reasoning to match the post-process behaviour for these providers.
-    let (reasoning_effort, reasoning) = match provider.id.as_str() {
-        "custom" => (Some("none".to_string()), None),
-        "openrouter" => (
-            None,
-            Some(crate::llm_client::ReasoningConfig {
-                effort: Some("none".to_string()),
-                exclude: Some(true),
-            }),
-        ),
-        _ => (None, None),
-    };
-
-    let system_prompt = "Sos un editor de texto. El usuario te pasa un texto seleccionado y una instrucción. Aplicá la instrucción al texto. Devolvé SOLO el texto nuevo, sin preámbulo, sin explicaciones, sin comillas, sin markdown. Si la instrucción es ambigua, hacé tu mejor interpretación. Mantené el idioma del texto original.".to_string();
-    let user_content = format!(
-        "Texto seleccionado:\n<<<\n{}\n>>>\n\nInstrucción:\n{}",
-        selection.trim(),
-        instruction.trim()
-    );
-
-    debug!(
-        "Edit Mode LLM call: provider '{}' model '{}' (selection {} chars, instruction {} chars)",
-        provider.id,
-        model,
-        selection.len(),
-        instruction.len()
-    );
-
-    match crate::llm_client::send_chat_completion_with_schema(
-        &provider,
-        api_key,
-        &model,
-        user_content,
-        Some(system_prompt),
-        None,
-        reasoning_effort,
-        reasoning,
+/// Style prompts that ship with the app. A prompt outside this list is the
+/// person's own, and only the local provider can run it.
+fn is_builtin_prompt(prompt_id: &str) -> bool {
+    matches!(
+        prompt_id,
+        "default_improve_transcriptions" | "ez_casual" | "ez_very_casual" | "ez_formal" | "ez_code"
     )
-    .await
-    {
-        Ok(Some(text)) => Some(text.trim().to_string()),
-        Ok(None) => {
-            warn!("Edit Mode: LLM returned empty content");
-            None
-        }
-        Err(e) => {
-            error!("Edit Mode LLM call failed: {}", e);
-            None
-        }
-    }
+}
+
+/// Whether a provider and a model are configured for local post-processing.
+fn local_provider_ready(settings: &AppSettings) -> bool {
+    settings
+        .active_post_process_provider()
+        .is_some_and(|provider| {
+            settings
+                .post_process_models
+                .get(&provider.id)
+                .is_some_and(|model| !model.trim().is_empty())
+        })
 }
 
 pub(crate) async fn process_transcription_output(
@@ -483,6 +452,8 @@ pub(crate) async fn process_transcription_output(
     transcription: &str,
     post_process: bool,
     prompt_id_override: Option<&str>,
+    context: Option<&ActiveApp>,
+    allow_vento: bool,
 ) -> ProcessedTranscription {
     let settings = get_settings(app);
     let mut final_text = transcription.to_string();
@@ -493,9 +464,71 @@ pub(crate) async fn process_transcription_output(
         final_text = converted_text;
     }
 
-    if post_process {
+    // Signed in to Vento: every dictation is cleaned there, in the style of
+    // the binding or, without one, of the app it is going to. If Vento
+    // cannot answer in time, the text falls through to the local path below
+    // (and, with no provider configured, is pasted as transcribed): a
+    // dictation is never lost to a failed cleanup.
+    //
+    // Exception: the binding asked for post-processing with a prompt the
+    // person wrote themselves (a translation, a house style). Vento only
+    // knows the built-in styles, so that one stays with the local provider.
+    let requested_prompt = prompt_id_override.map(str::to_string).or_else(|| {
+        post_process
+            .then(|| settings.post_process_selected_prompt_id.clone())
+            .flatten()
+    });
+    let own_prompt = post_process
+        && requested_prompt
+            .as_deref()
+            .is_some_and(|id| !is_builtin_prompt(id))
+        && local_provider_ready(&settings);
+
+    let mut cleaned_by_vento = false;
+    let mut vento_tried = false;
+    if let Some(account) =
+        vento_cleanup_account(app, &settings, allow_vento).filter(|_| !own_prompt)
+    {
+        vento_tried = true;
+        let style_prompt = prompt_id_override
+            .map(str::to_string)
+            .or_else(|| context.and_then(|app| settings.app_prompt_map.get(&app.process).cloned()));
+        let style = style_for_prompt(style_prompt.as_deref());
+        let shared_context = context.filter(|_| settings.context_awareness);
+        let request = VoiceRequest::Clean {
+            text: &final_text,
+            style,
+            app: shared_context.map(|app| app.process.as_str()),
+            window_title: shared_context.and_then(|app| app.title.as_deref()),
+            dictionary: &settings.custom_words,
+        };
+        match tokio::time::timeout(VENTO_CLEANUP_DEADLINE, account.voice(request)).await {
+            Ok(Ok(response)) if !response.truncated => {
+                post_processed_text = Some(response.text.clone());
+                post_process_prompt = Some(format!("Vento · {}", style));
+                final_text = response.text;
+                cleaned_by_vento = true;
+            }
+            Ok(Ok(_)) => warn!("Vento cleanup came back cut short; keeping the transcription"),
+            Ok(Err(e)) => {
+                warn!("Vento cleanup failed: {:?}", e);
+                if matches!(e, VentoError::NotSignedIn | VentoError::DailyLimit) {
+                    // The account screen should show why cleanups stopped.
+                    let _ = app.emit(crate::commands::vento::ACCOUNT_CHANGED_EVENT, ());
+                }
+            }
+            Err(_) => warn!(
+                "Vento cleanup did not answer in {:?}; keeping the transcription",
+                VENTO_CLEANUP_DEADLINE
+            ),
+        }
+    }
+
+    if cleaned_by_vento {
+        // Nothing else to do.
+    } else if post_process {
         if let Some(processed_text) =
-            post_process_transcription(&settings, &final_text, prompt_id_override).await
+            post_process_transcription(&settings, &final_text, prompt_id_override, context).await
         {
             post_processed_text = Some(processed_text.clone());
             final_text = processed_text;
@@ -522,7 +555,21 @@ pub(crate) async fn process_transcription_output(
         final_text,
         post_processed_text,
         post_process_prompt,
+        cleanup_requested: post_process || vento_tried,
     }
+}
+
+/// The Vento account to clean a dictation with, when that applies: the
+/// caller allows it, the setting is on and the account is usable.
+fn vento_cleanup_account(
+    app: &AppHandle,
+    settings: &AppSettings,
+    allow_vento: bool,
+) -> Option<Arc<VentoAccount>> {
+    if !allow_vento || !settings.vento_cleanup {
+        return None;
+    }
+    crate::commands::vento::account(app).filter(|account| account.is_ready())
 }
 
 impl ShortcutAction for TranscribeAction {
@@ -602,19 +649,27 @@ impl ShortcutAction for TranscribeAction {
             // Phase 6: dynamically register the hands-free toggle (Space)
             // so it only hijacks Space while recording is active.
             shortcut::register_hands_free_shortcut(app);
+
+            // While the person talks, get the Vento connection and token
+            // ready so the cleanup does not pay for them afterwards.
+            if let Some(account) =
+                crate::commands::vento::account(app).filter(|account| account.is_ready())
+            {
+                tauri::async_runtime::spawn(async move { account.prewarm().await });
+            }
         } else {
             // Starting failed (for example due to blocked microphone permissions).
             // Revert UI state so we don't stay stuck in the recording overlay.
-            utils::hide_recording_overlay(app);
             change_tray_icon(app, TrayIconState::Idle);
             if let Some(err) = recording_error {
-                let error_type = if is_microphone_access_denied(&err) {
-                    "microphone_permission_denied"
+                let (error_type, overlay_error) = if is_microphone_access_denied(&err) {
+                    ("microphone_permission_denied", OverlayError::MicDenied)
                 } else if is_no_input_device_error(&err) {
-                    "no_input_device"
+                    ("no_input_device", OverlayError::NoMic)
                 } else {
-                    "unknown"
+                    ("unknown", OverlayError::Generic)
                 };
+                utils::show_error_overlay(app, overlay_error);
                 let _ = app.emit(
                     "recording-error",
                     RecordingErrorEvent {
@@ -662,42 +717,28 @@ impl ShortcutAction for TranscribeAction {
         let auto_context = self.auto_context;
         let scratchpad = self.scratchpad;
 
+        // The app the text is going to. Read here, synchronously, while the
+        // user's target window is still in front: it picks the style in
+        // auto mode, gives the cleanup model its context, tells selection
+        // capture whether copying is safe, and is stored for Insights.
+        let target_app = crate::active_window::active_app();
+
         // Phase 11 (rescue): resolve auto-mode prompt id synchronously here
         // (before the spawn) so we capture the foreground app while the
         // user's target window is still focused. Stored as String to keep
         // ownership through the .await boundary.
         let auto_resolved_prompt_id: Option<String> = if auto_context {
-            let proc = crate::active_window::active_process_name();
             let settings = get_settings(app);
-            let resolved = proc
-                .as_deref()
-                .and_then(|name| settings.app_prompt_map.get(name).cloned())
+            let resolved = target_app
+                .as_ref()
+                .and_then(|app| settings.app_prompt_map.get(&app.process).cloned())
                 .unwrap_or_else(|| "ez_casual".to_string());
             debug!(
-                "Auto-mode: foreground process={:?} → prompt='{}'",
-                proc, resolved
+                "Auto-mode: foreground app={:?} → prompt='{}'",
+                target_app.as_ref().map(|app| app.process.as_str()),
+                resolved
             );
             Some(resolved)
-        } else {
-            None
-        };
-
-        // Phase 8: snapshot the clipboard right at hotkey release. The user
-        // is expected to have Ctrl+C'd their target text before pressing the
-        // Edit Mode hotkey, so this captures the staged selection.
-        let edit_selection: Option<String> = if edit_mode {
-            use tauri_plugin_clipboard_manager::ClipboardExt;
-            match app.clipboard().read_text() {
-                Ok(text) if !text.trim().is_empty() => Some(text),
-                Ok(_) => {
-                    warn!("Edit Mode: clipboard is empty — copy your target text first");
-                    None
-                }
-                Err(e) => {
-                    warn!("Edit Mode: failed to read clipboard: {}", e);
-                    None
-                }
-            }
         } else {
             None
         };
@@ -710,7 +751,9 @@ impl ShortcutAction for TranscribeAction {
             );
 
             let stop_recording_time = Instant::now();
-            if let Some(samples) = rm.stop_recording(&binding_id) {
+            let stopped = rm.stop_recording(&binding_id);
+
+            if let Some(samples) = stopped {
                 debug!(
                     "Recording stopped and samples retrieved in {:?}, sample count: {}",
                     stop_recording_time.elapsed(),
@@ -719,11 +762,31 @@ impl ShortcutAction for TranscribeAction {
 
                 if samples.is_empty() {
                     debug!("Recording produced no audio samples; skipping persistence");
-                    utils::hide_recording_overlay(&ah);
+                    utils::show_error_overlay(&ah, OverlayError::NoSpeech);
                     change_tray_icon(&ah, TrayIconState::Idle);
                 } else {
+                    // Edit Mode: read what the user has selected in the
+                    // foreground app (see `selection.rs`). It starts once
+                    // the microphone is closed and there is audio to act
+                    // on, and runs while that audio is transcribed. `None`
+                    // means nothing is selected and the instruction becomes
+                    // a writing request.
+                    let mut selection_task = if edit_mode {
+                        let ah = ah.clone();
+                        let target_app = target_app.clone();
+                        Some(tauri::async_runtime::spawn_blocking(move || {
+                            selected_text(&ah, target_app.as_ref())
+                        }))
+                    } else {
+                        None
+                    };
+
                     // Save WAV concurrently with transcription
                     let sample_count = samples.len();
+                    let dictation_meta = DictationMeta {
+                        duration_ms: Some(samples_to_ms(sample_count)),
+                        app_name: target_app.as_ref().map(|app| app.process.clone()),
+                    };
                     let file_name = format!("handy-{}.wav", chrono::Utc::now().timestamp());
                     let wav_path = hm.recordings_dir().join(&file_name);
                     let wav_path_for_verify = wav_path.clone();
@@ -763,28 +826,34 @@ impl ShortcutAction for TranscribeAction {
                     match transcription_result {
                         Ok(transcription) => {
                             debug!(
-                                "Transcription completed in {:?}: '{}'",
+                                "Transcription completed in {:?}: {} chars",
                                 transcription_time.elapsed(),
-                                transcription
+                                transcription.chars().count()
                             );
 
-                            if post_process {
+                            // Voice commands and Edit Mode instructions are
+                            // used as spoken, never cleaned.
+                            let allow_vento = !voice_command && !edit_mode;
+                            if post_process
+                                || vento_cleanup_account(&ah, &get_settings(&ah), allow_vento)
+                                    .is_some()
+                            {
                                 show_processing_overlay(&ah);
                             }
                             // Phase 11 (rescue): auto-context wins over static override.
-                            let effective_prompt_id: Option<&str> = match (
-                                auto_resolved_prompt_id.as_deref(),
-                                prompt_id_override,
-                            ) {
-                                (Some(s), _) => Some(s),
-                                (None, Some(s)) => Some(s),
-                                _ => None,
-                            };
+                            let effective_prompt_id: Option<&str> =
+                                match (auto_resolved_prompt_id.as_deref(), prompt_id_override) {
+                                    (Some(s), _) => Some(s),
+                                    (None, Some(s)) => Some(s),
+                                    _ => None,
+                                };
                             let processed = process_transcription_output(
                                 &ah,
                                 &transcription,
                                 post_process,
                                 effective_prompt_id,
+                                target_app.as_ref(),
+                                allow_vento,
                             )
                             .await;
 
@@ -793,9 +862,12 @@ impl ShortcutAction for TranscribeAction {
                                 if let Err(err) = hm.save_entry(
                                     file_name,
                                     transcription,
-                                    post_process,
+                                    // Also true when Vento was tried,
+                                    // so a retry from History cleans it.
+                                    processed.cleanup_requested,
                                     processed.post_processed_text.clone(),
                                     processed.post_process_prompt.clone(),
+                                    dictation_meta.clone(),
                                 ) {
                                     error!("Failed to save history entry: {}", err);
                                 }
@@ -805,39 +877,41 @@ impl ShortcutAction for TranscribeAction {
                             // between LLM cleanup and paste. Custom-words substitution
                             // already ran inside `transcription.rs`.
                             let snippets = get_settings(&ah).snippets;
-                            let mut final_text =
-                                apply_snippets(&processed.final_text, &snippets);
+                            let mut final_text = apply_snippets(&processed.final_text, &snippets);
 
-                            // Phase 8: if Edit Mode, treat `final_text` as an
-                            // instruction and rewrite the captured selection
-                            // via the LLM. Result replaces final_text and falls
-                            // through to the standard paste flow.
-                            if edit_mode {
-                                if let Some(selection) = edit_selection.as_ref() {
-                                    let settings = get_settings(&ah);
-                                    if let Some(rewritten) = process_edit_mode_request(
-                                        &settings,
-                                        selection,
-                                        &final_text,
-                                    )
-                                    .await
-                                    {
-                                        debug!(
-                                            "Edit Mode rewrite: {} → {} chars",
-                                            selection.len(),
-                                            rewritten.len()
-                                        );
-                                        final_text = rewritten;
-                                    } else {
-                                        warn!("Edit Mode: rewrite failed; pasting instruction as-is");
+                            // Edit Mode: `final_text` is the spoken instruction.
+                            // Apply it to the selection (or, with nothing
+                            // selected, write what it asks for) and paste the
+                            // result through the standard flow. On failure
+                            // nothing is pasted: pasting the instruction would
+                            // overwrite the user's selection with it.
+                            // Always collect the selection read, so the
+                            // clipboard is back in place before any paste.
+                            let edit_selection: Option<String> = match selection_task.take() {
+                                Some(task) => task.await.ok().flatten(),
+                                None => None,
+                            };
+                            let mut edit_error: Option<OverlayError> = None;
+                            if edit_mode && !final_text.trim().is_empty() {
+                                show_processing_overlay(&ah);
+                                let request = AssistRequest::Edit {
+                                    selection: edit_selection.as_deref(),
+                                    instruction: &final_text,
+                                };
+                                match assist::run(&ah, request).await {
+                                    Ok(rewritten) => final_text = rewritten,
+                                    Err(e) => {
+                                        warn!("Edit Mode: {:?}", e);
+                                        edit_error = Some(overlay_error_for(&e));
                                     }
-                                } else {
-                                    warn!("Edit Mode: no selection captured; pasting instruction as-is");
                                 }
                             }
 
-                            if final_text.is_empty() {
-                                utils::hide_recording_overlay(&ah);
+                            if let Some(edit_error) = edit_error {
+                                utils::show_error_overlay(&ah, edit_error);
+                                change_tray_icon(&ah, TrayIconState::Idle);
+                            } else if final_text.is_empty() {
+                                utils::show_error_overlay(&ah, OverlayError::NoSpeech);
                                 change_tray_icon(&ah, TrayIconState::Idle);
                             } else if scratchpad {
                                 // Phase 16: send to in-app Scratchpad view
@@ -850,14 +924,20 @@ impl ShortcutAction for TranscribeAction {
                                 // the phrase up in `voice_commands` and launch.
                                 let commands = get_settings(&ah).voice_commands;
                                 match app_launcher::match_and_launch(&final_text, &commands) {
-                                    Ok(phrase) => debug!("Voice command launched: '{}'", phrase),
+                                    Ok(phrase) => {
+                                        debug!("Voice command launched: '{}'", phrase);
+                                        utils::hide_recording_overlay(&ah);
+                                    }
                                     Err(e) => {
                                         warn!("{}", e);
                                         // Emit an event so the frontend can show a toast/notification
                                         let _ = ah.emit("voice-command-miss", final_text.clone());
+                                        utils::show_error_overlay(
+                                            &ah,
+                                            OverlayError::CommandNotFound,
+                                        );
                                     }
                                 }
-                                utils::hide_recording_overlay(&ah);
                                 change_tray_icon(&ah, TrayIconState::Idle);
                             } else {
                                 let ah_clone = ah.clone();
@@ -865,16 +945,22 @@ impl ShortcutAction for TranscribeAction {
                                 let final_text_clone = final_text.clone();
                                 ah.run_on_main_thread(move || {
                                     match utils::paste(final_text_clone, ah_clone.clone()) {
-                                        Ok(()) => debug!(
-                                            "Text pasted successfully in {:?}",
-                                            paste_time.elapsed()
-                                        ),
+                                        Ok(()) => {
+                                            debug!(
+                                                "Text pasted successfully in {:?}",
+                                                paste_time.elapsed()
+                                            );
+                                            utils::hide_recording_overlay(&ah_clone);
+                                        }
                                         Err(e) => {
                                             error!("Failed to paste transcription: {}", e);
                                             let _ = ah_clone.emit("paste-error", ());
+                                            utils::show_error_overlay(
+                                                &ah_clone,
+                                                OverlayError::PasteFailed,
+                                            );
                                         }
                                     }
-                                    utils::hide_recording_overlay(&ah_clone);
                                     change_tray_icon(&ah_clone, TrayIconState::Idle);
                                 })
                                 .unwrap_or_else(|e| {
@@ -894,11 +980,12 @@ impl ShortcutAction for TranscribeAction {
                                     post_process,
                                     None,
                                     None,
+                                    dictation_meta.clone(),
                                 ) {
                                     error!("Failed to save failed history entry: {}", save_err);
                                 }
                             }
-                            utils::hide_recording_overlay(&ah);
+                            utils::show_error_overlay(&ah, OverlayError::TranscriptionFailed);
                             change_tray_icon(&ah, TrayIconState::Idle);
                         }
                     }
@@ -930,119 +1017,176 @@ impl ShortcutAction for CancelAction {
     }
 }
 
-// Phase 15 (Bundle 3): Transform Action — pre-bound LLM transform applied
-// to the clipboard. Pattern: user copies text → presses transform hotkey →
-// LLM rewrites with this transform's prompt → response pastes (replacing
-// the selection if it's still active).
+/// Length in milliseconds of `sample_count` samples of recorded speech.
+fn samples_to_ms(sample_count: usize) -> i64 {
+    (sample_count as i64) * 1000 / i64::from(WHISPER_SAMPLE_RATE)
+}
+
+/// Text selected in the foreground app, or `None` when nothing is.
+///
+/// Where copy cannot be simulated safely (Wayland, a terminal) it falls back
+/// to what the user copied by hand, which is how this worked before.
+///
+/// Blocks for up to about a second; never call it from the main thread.
+fn selected_text(app: &AppHandle, target: Option<&ActiveApp>) -> Option<String> {
+    match selection::capture_selection(app, target) {
+        Selection::Text(text) => Some(text),
+        Selection::Empty => None,
+        Selection::Unsupported => {
+            use tauri_plugin_clipboard_manager::ClipboardExt;
+            app.clipboard()
+                .read_text()
+                .ok()
+                .filter(|text| !text.trim().is_empty())
+        }
+    }
+}
+
+/// The pill message for a failed model request.
+fn overlay_error_for(error: &AssistError) -> OverlayError {
+    match error {
+        AssistError::NotConfigured => OverlayError::AiNotConfigured,
+        AssistError::Empty | AssistError::Failed(_) => OverlayError::AiFailed,
+    }
+}
+
+// Transform Action — a pre-bound rewrite of the selected text. Pattern: user
+// selects text → presses and releases the transform hotkey → the model
+// rewrites it with this transform's prompt → the result is pasted over the
+// selection.
 struct TransformAction {
     name: &'static str,
+    /// The name Vento knows this transform by.
+    kind: &'static str,
     system_prompt: &'static str,
 }
 
 impl ShortcutAction for TransformAction {
-    fn start(&self, app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
-        let ah = app.clone();
-        let name = self.name;
-        let system_prompt = self.system_prompt;
-
-        // Capture clipboard synchronously before spawning so the user's
-        // selection state is preserved.
-        use tauri_plugin_clipboard_manager::ClipboardExt;
-        let selection = match app.clipboard().read_text() {
-            Ok(text) if !text.trim().is_empty() => text,
-            Ok(_) => {
-                warn!("Transform '{}': clipboard is empty — nothing to do", name);
-                return;
-            }
-            Err(e) => {
-                warn!("Transform '{}': failed to read clipboard: {}", name, e);
-                return;
-            }
-        };
-
-        debug!(
-            "Transform '{}' invoked on {} chars of clipboard",
-            name,
-            selection.len()
-        );
-        change_tray_icon(app, TrayIconState::Transcribing);
-
-        tauri::async_runtime::spawn(async move {
-            let settings = get_settings(&ah);
-            let provider = match settings.active_post_process_provider().cloned() {
-                Some(p) => p,
-                None => {
-                    warn!("Transform '{}': no post-process provider configured", name);
-                    change_tray_icon(&ah, TrayIconState::Idle);
-                    return;
-                }
-            };
-            let model = settings
-                .post_process_models
-                .get(&provider.id)
-                .cloned()
-                .unwrap_or_default();
-            if model.trim().is_empty() {
-                warn!("Transform '{}': no model configured for provider", name);
-                change_tray_icon(&ah, TrayIconState::Idle);
-                return;
-            }
-            let api_key = settings
-                .post_process_api_keys
-                .get(&provider.id)
-                .cloned()
-                .unwrap_or_default();
-
-            let (reasoning_effort, reasoning) = match provider.id.as_str() {
-                "custom" => (Some("none".to_string()), None),
-                "openrouter" => (
-                    None,
-                    Some(crate::llm_client::ReasoningConfig {
-                        effort: Some("none".to_string()),
-                        exclude: Some(true),
-                    }),
-                ),
-                _ => (None, None),
-            };
-
-            let result = crate::llm_client::send_chat_completion_with_schema(
-                &provider,
-                api_key,
-                &model,
-                selection,
-                Some(system_prompt.to_string()),
-                None,
-                reasoning_effort,
-                reasoning,
-            )
-            .await;
-
-            match result {
-                Ok(Some(new_text)) => {
-                    let trimmed = new_text.trim().to_string();
-                    let ah_clone = ah.clone();
-                    let _ = ah.run_on_main_thread(move || {
-                        match utils::paste(trimmed, ah_clone.clone()) {
-                            Ok(()) => debug!("Transform '{}': pasted result", name),
-                            Err(e) => error!("Transform '{}' paste failed: {}", name, e),
-                        }
-                        change_tray_icon(&ah_clone, TrayIconState::Idle);
-                    });
-                }
-                Ok(None) => {
-                    warn!("Transform '{}': LLM returned empty", name);
-                    change_tray_icon(&ah, TrayIconState::Idle);
-                }
-                Err(e) => {
-                    error!("Transform '{}' LLM call failed: {}", name, e);
-                    change_tray_icon(&ah, TrayIconState::Idle);
-                }
-            }
-        });
+    fn start(&self, _app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
+        // Nothing on press: the work happens on release. The release event
+        // fires when the main key goes up, possibly with modifiers still
+        // held; `selection.rs` waits for those before simulating the copy.
     }
 
-    fn stop(&self, _app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
-        // No-op — fire-on-press only.
+    fn stop(&self, app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
+        let name = self.name;
+        let kind = self.kind;
+        let system_prompt = self.system_prompt;
+        let ah = app.clone();
+
+        // Reserving the pipeline and reading the selection both block, so
+        // they get their own thread rather than the shortcut handler's.
+        std::thread::spawn(move || {
+            // A Transform uses the clipboard, the paste and the pill, the
+            // same things a dictation uses: one at a time. The guard hands
+            // the pipeline back when this work ends, however it ends.
+            let Some(coordinator) = ah.try_state::<TranscriptionCoordinator>() else {
+                return;
+            };
+            if !coordinator.try_begin_external() {
+                debug!("Transform '{}' ignored: the pipeline is busy", name);
+                return;
+            }
+            let guard = FinishGuard(ah.clone());
+
+            let target_app = crate::active_window::active_app();
+            let Some(selection) = selected_text(&ah, target_app.as_ref()) else {
+                debug!("Transform '{}': nothing selected", name);
+                utils::show_error_overlay(&ah, OverlayError::NoSelection);
+                return;
+            };
+
+            debug!(
+                "Transform '{}' invoked on {} selected chars",
+                name,
+                selection.len()
+            );
+            change_tray_icon(&ah, TrayIconState::Transcribing);
+            show_processing_overlay(&ah);
+
+            tauri::async_runtime::spawn(async move {
+                let request = AssistRequest::Transform {
+                    kind,
+                    system_prompt,
+                    text: &selection,
+                };
+                match assist::run(&ah, request).await {
+                    Ok(new_text) => {
+                        let ah_clone = ah.clone();
+                        ah.run_on_main_thread(move || {
+                            // Released only after the paste (and its
+                            // clipboard restore) has actually run.
+                            let _guard = guard;
+                            match utils::paste(new_text, ah_clone.clone()) {
+                                Ok(()) => {
+                                    debug!("Transform '{}': pasted result", name);
+                                    utils::hide_recording_overlay(&ah_clone);
+                                }
+                                Err(e) => {
+                                    error!("Transform '{}' paste failed: {}", name, e);
+                                    utils::show_error_overlay(&ah_clone, OverlayError::PasteFailed);
+                                }
+                            }
+                            change_tray_icon(&ah_clone, TrayIconState::Idle);
+                        })
+                        .unwrap_or_else(|e| {
+                            error!("Transform '{}': main thread unavailable: {:?}", name, e);
+                            utils::hide_recording_overlay(&ah);
+                            change_tray_icon(&ah, TrayIconState::Idle);
+                        });
+                    }
+                    Err(e) => {
+                        warn!("Transform '{}': {:?}", name, e);
+                        utils::show_error_overlay(&ah, overlay_error_for(&e));
+                        change_tray_icon(&ah, TrayIconState::Idle);
+                        drop(guard);
+                    }
+                }
+            });
+        });
+    }
+}
+
+// Adds the word (or short name) selected in the foreground app to the
+// dictionary. Same release-then-copy pattern as a Transform.
+struct AddToDictionaryAction;
+
+impl ShortcutAction for AddToDictionaryAction {
+    fn start(&self, _app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
+        // Nothing on press: see `TransformAction::start`.
+    }
+
+    fn stop(&self, app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
+        let ah = app.clone();
+        std::thread::spawn(move || {
+            let Some(coordinator) = ah.try_state::<TranscriptionCoordinator>() else {
+                return;
+            };
+            if !coordinator.try_begin_external() {
+                debug!("Add to dictionary ignored: the pipeline is busy");
+                return;
+            }
+            let _guard = FinishGuard(ah.clone());
+
+            let target_app = crate::active_window::active_app();
+            let word = selected_text(&ah, target_app.as_ref())
+                .as_deref()
+                .and_then(learn::word_from_selection);
+            let Some(word) = word else {
+                utils::show_error_overlay(&ah, OverlayError::NoSelection);
+                return;
+            };
+
+            let mut settings = get_settings(&ah);
+            if learn::add_word(&mut settings.custom_words, &word) {
+                crate::settings::write_settings(&ah, settings);
+                crate::commands::vento::profile_changed(&ah);
+                let _ = ah.emit("dictionary-changed", ());
+                utils::show_error_overlay(&ah, OverlayError::WordAdded);
+            } else {
+                utils::show_error_overlay(&ah, OverlayError::WordKnown);
+            }
+        });
     }
 }
 
@@ -1207,6 +1351,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
         "transform_polish".to_string(),
         Arc::new(TransformAction {
             name: "Polish",
+            kind: "polish",
             system_prompt: "You are a writing assistant. Rewrite the user's text to improve clarity, conciseness, and grammar while preserving the original meaning, voice, and language. Return ONLY the rewritten text, with no preamble, quotes, or markdown.",
         }) as Arc<dyn ShortcutAction>,
     );
@@ -1214,6 +1359,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
         "transform_prompt_engineer".to_string(),
         Arc::new(TransformAction {
             name: "Prompt Engineer",
+            kind: "prompt_engineer",
             system_prompt: "You are a prompt engineer. Rewrite the user's text as a well-structured LLM prompt: clear role, explicit task, constraints, expected output format. Keep the user's original intent. Return ONLY the new prompt, no preamble or commentary.",
         }) as Arc<dyn ShortcutAction>,
     );
@@ -1221,8 +1367,13 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
         "transform_summarize".to_string(),
         Arc::new(TransformAction {
             name: "Summarize",
+            kind: "summarize",
             system_prompt: "Summarize the user's text in 3-5 concise sentences. Keep the original language. Preserve the key facts and the speaker's tone. Return ONLY the summary, no preamble, no bullet points unless the original used them.",
         }) as Arc<dyn ShortcutAction>,
+    );
+    map.insert(
+        "add_selection_to_dictionary".to_string(),
+        Arc::new(AddToDictionaryAction) as Arc<dyn ShortcutAction>,
     );
     map.insert(
         "cancel".to_string(),

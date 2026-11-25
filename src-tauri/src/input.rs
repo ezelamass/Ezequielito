@@ -51,6 +51,47 @@ pub fn send_paste_ctrl_v(enigo: &mut Enigo) -> Result<(), String> {
     Ok(())
 }
 
+/// Sends Ctrl+C (Cmd+C on macOS) using layout-independent key codes, so the
+/// foreground app copies its current selection.
+///
+/// `release_stray_modifiers`: the caller could not confirm that the user let
+/// go of the hotkey's modifiers, so Shift and Alt are released first. Left
+/// down, they would turn the shortcut into something else (Ctrl+Shift+C
+/// opens dev tools in browsers).
+///
+/// Returns `Ok` once the copy keystroke went out, even if releasing the
+/// modifier afterwards failed: the app has already been asked to copy.
+pub fn send_copy(enigo: &mut Enigo, release_stray_modifiers: bool) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    let (modifier_key, c_key_code) = (Key::Meta, Key::Other(8)); // kVK_ANSI_C
+    #[cfg(target_os = "windows")]
+    let (modifier_key, c_key_code) = (Key::Control, Key::Other(0x43)); // VK_C
+    #[cfg(target_os = "linux")]
+    let (modifier_key, c_key_code) = (Key::Control, Key::Unicode('c'));
+
+    if release_stray_modifiers {
+        let _ = enigo.key(Key::Shift, enigo::Direction::Release);
+        let _ = enigo.key(Key::Alt, enigo::Direction::Release);
+    }
+
+    enigo
+        .key(modifier_key, enigo::Direction::Press)
+        .map_err(|e| format!("Failed to press modifier key: {}", e))?;
+    let clicked = enigo
+        .key(c_key_code, enigo::Direction::Click)
+        .map_err(|e| format!("Failed to click C key: {}", e));
+
+    std::thread::sleep(std::time::Duration::from_millis(30));
+
+    // Always release the modifier, even if the click failed, so it is never
+    // left stuck down.
+    if let Err(e) = enigo.key(modifier_key, enigo::Direction::Release) {
+        log::warn!("Failed to release modifier key after copy: {}", e);
+    }
+
+    clicked
+}
+
 /// Sends a Ctrl+Shift+V paste command.
 /// This is commonly used in terminal applications on Linux to paste without formatting.
 /// Note: On Wayland, this may not work - callers should check for Wayland and use alternative methods.

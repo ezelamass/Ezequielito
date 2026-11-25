@@ -19,7 +19,7 @@ on:
       asset-prefix:
         required: false
         type: string
-        default: "handy"
+        default: "vento-voice"
       asset-name-pattern:
         required: false
         type: string
@@ -92,7 +92,13 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        # Pinned. Newer Cargo moved build-script output one directory deeper
+        # (target/<profile>/build/<pkg>/<hash>/out), and ort-sys 2.0.0-rc.12
+        # locates the folder for its DLLs by walking up from there: on
+        # Windows it then fails with "The system cannot find the path
+        # specified". 1.97.0 still has the layout it expects. Unpin once
+        # ort-sys is upgraded.
+        uses: dtolnay/rust-toolchain@1.97.0
         with:
           # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
           targets: ${{ contains(inputs.platform, 'macos') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
@@ -181,8 +187,22 @@ jobs:
           vulkan-components: Vulkan-Headers, Vulkan-Loader
           vulkan-use-cache: true
 
+      # Signing is asked for by the caller (`sign-binaries`) but only possible
+      # when the certificates are configured as repository secrets. Without
+      # them the build still runs: macOS gets an ad-hoc signature
+      # (`signingIdentity: "-"` in tauri.conf.json) and Windows is unsigned.
+      - name: Detect signing secrets
+        id: signing
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        run: |
+          if [ -n "$APPLE_CERTIFICATE" ]; then echo "apple=true" >> "$GITHUB_OUTPUT"; else echo "apple=false" >> "$GITHUB_OUTPUT"; fi
+          if [ -n "$AZURE_CLIENT_ID" ]; then echo "azure=true" >> "$GITHUB_OUTPUT"; else echo "azure=false" >> "$GITHUB_OUTPUT"; fi
+
       - name: Cache trusted-signing-cli
-        if: contains(inputs.platform, 'windows') && inputs.sign-binaries
+        if: contains(inputs.platform, 'windows') && inputs.sign-binaries && steps.signing.outputs.azure == 'true'
         id: cache-tsc
         uses: actions/cache@v4
         with:
@@ -190,7 +210,7 @@ jobs:
           key: trusted-signing-cli-${{ env.TSC_VERSION }}-${{ runner.os }}-${{ runner.arch }}
 
       - name: Install trusted-signing-cli
-        if: contains(inputs.platform, 'windows') && inputs.sign-binaries && steps.cache-tsc.outputs.cache-hit != 'true'
+        if: contains(inputs.platform, 'windows') && inputs.sign-binaries && steps.signing.outputs.azure == 'true' && steps.cache-tsc.outputs.cache-hit != 'true'
         run: cargo install trusted-signing-cli@${{ env.TSC_VERSION }}
 
       - name: Prepare Vulkan SDK for Ubuntu 24.04
@@ -237,7 +257,7 @@ jobs:
         run: rustup target add ${{ inputs.target }}
 
       - name: import Apple Developer Certificate
-        if: contains(inputs.platform, 'macos') && inputs.sign-binaries
+        if: contains(inputs.platform, 'macos') && inputs.sign-binaries && steps.signing.outputs.apple == 'true'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -253,7 +273,7 @@ jobs:
           security find-identity -v -p codesigning build.keychain
 
       - name: verify certificate
-        if: contains(inputs.platform, 'macos') && inputs.sign-binaries
+        if: contains(inputs.platform, 'macos') && inputs.sign-binaries && steps.signing.outputs.apple == 'true'
         run: |
           CERT_INFO=$(security find-identity -v -p codesigning build.keychain | grep "Developer ID Application")
           CERT_ID=$(echo "$CERT_INFO" | awk -F'"' '{print $2}')
@@ -338,6 +358,7 @@ jobs:
             src-tauri/tauri.conf.json > tmp.json && mv tmp.json src-tauri/tauri.conf.json
 
       - name: Build with Tauri
+        if: ${{ !(contains(inputs.platform, 'macos') && steps.signing.outputs.apple != 'true') }}
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -369,6 +390,34 @@ jobs:
           assetNamePattern: ${{ steps.patch-release-name.outputs.platform }}
           args: ${{ inputs.build-args }}
 
+      # Same build without the APPLE_* variables. Tauri tries to import a
+      # certificate whenever APPLE_CERTIFICATE is defined, even empty, and
+      # fails the bundle; a step-level `env` cannot leave a key out
+      # conditionally, hence the second step. The app gets the ad-hoc
+      # signature from `signingIdentity: "-"` in tauri.conf.json.
+      - name: Build with Tauri (macOS, no certificate)
+        if: ${{ contains(inputs.platform, 'macos') && steps.signing.outputs.apple != 'true' }}
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ inputs.sign-binaries && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ inputs.sign-binaries && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
+          # Disable -march=native and all SIMD instruction sets above SSE4.2 for
+          # x86_64 builds. Without this, CPUs lacking AVX/FMA (e.g. Celeron N2920,
+          # FX-8350) crash with SIGILL. The Vulkan backend handles heavy compute
+          # so disabling these has negligible performance impact.
+          GGML_NATIVE: ${{ !contains(inputs.platform, 'macos') && !contains(inputs.platform, 'arm') && !contains(inputs.target, 'aarch64') && 'OFF' || '' }}
+          GGML_AVX: ${{ !contains(inputs.platform, 'macos') && !contains(inputs.platform, 'arm') && !contains(inputs.target, 'aarch64') && 'OFF' || '' }}
+          GGML_AVX2: ${{ !contains(inputs.platform, 'macos') && !contains(inputs.platform, 'arm') && !contains(inputs.target, 'aarch64') && 'OFF' || '' }}
+          GGML_FMA: ${{ !contains(inputs.platform, 'macos') && !contains(inputs.platform, 'arm') && !contains(inputs.target, 'aarch64') && 'OFF' || '' }}
+          GGML_F16C: ${{ !contains(inputs.platform, 'macos') && !contains(inputs.platform, 'arm') && !contains(inputs.target, 'aarch64') && 'OFF' || '' }}
+        with:
+          tagName: ${{ inputs.release-id && format('v{0}', steps.get-version.outputs.version) || '' }}
+          releaseName: ${{ inputs.release-id && format('v{0}', steps.get-version.outputs.version) || '' }}
+          releaseId: ${{ inputs.release-id }}
+          assetNamePattern: ${{ steps.patch-release-name.outputs.platform }}
+          args: ${{ inputs.build-args }}
+
       - name: Verify macOS dylib bundling
         if: inputs.target == 'x86_64-apple-darwin'
         shell: bash
@@ -377,10 +426,10 @@ jobs:
           echo "=== Frameworks contents ==="
           ls -la "$APP/Contents/Frameworks/" | grep onnx || true
           echo "=== Binary linked libs ==="
-          otool -L "$APP/Contents/MacOS/handy" | grep onnx || true
+          otool -L "$APP/Contents/MacOS/vento-voice" | grep onnx || true
           echo "=== Checking all @rpath deps are satisfied ==="
           # Extract every @rpath lib the binary needs
-          otool -L "$APP/Contents/MacOS/handy" | grep '@rpath/' | awk '{print $1}' | while read dep; do
+          otool -L "$APP/Contents/MacOS/vento-voice" | grep '@rpath/' | awk '{print $1}' | while read dep; do
             libname=$(basename "$dep")
             if [ ! -f "$APP/Contents/Frameworks/$libname" ]; then
               echo "MISSING: $libname not found in Frameworks/"

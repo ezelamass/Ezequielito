@@ -374,6 +374,20 @@ pub struct AppSettings {
     pub selected_language: String,
     #[serde(default = "default_overlay_position")]
     pub overlay_position: OverlayPosition,
+    /// Tell the cleanup model which app (and window) the text is going to,
+    /// so it can match the tone and spell names that appear there.
+    #[serde(default = "default_true")]
+    pub context_awareness: bool,
+    /// Dictionary suggestions the person said no to; never offered again.
+    #[serde(default)]
+    pub dictionary_dismissed: Vec<String>,
+    /// While signed in to Vento, clean up every dictation there (fillers,
+    /// self-corrections, punctuation, tone). Off: paste the raw transcription.
+    #[serde(default = "default_true")]
+    pub vento_cleanup: bool,
+    /// Keep a small pill on screen while idle; clicking it starts dictation.
+    #[serde(default = "default_overlay_idle_pill")]
+    pub overlay_idle_pill: bool,
     #[serde(default = "default_debug_mode")]
     pub debug_mode: bool,
     #[serde(default = "default_log_level")]
@@ -494,6 +508,16 @@ fn default_update_checks_enabled() -> bool {
 
 fn default_selected_language() -> String {
     "auto".to_string()
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_overlay_idle_pill() -> bool {
+    // Off on Linux, where the overlay itself is off by default (Wayland
+    // compositors differ too much in how they treat always-on-top windows).
+    cfg!(not(target_os = "linux"))
 }
 
 fn default_overlay_position() -> OverlayPosition {
@@ -685,17 +709,17 @@ fn default_post_process_prompts() -> Vec<LLMPrompt> {
         // (transcribe_casual / transcribe_formal / transcribe_code).
         LLMPrompt {
             id: "ez_casual".to_string(),
-            name: "Casual (Ezequielito)".to_string(),
+            name: "Casual".to_string(),
             prompt: "Limpia esta transcripción manteniendo un tono conversacional natural en español:\n1. Quita muletillas (eh, este, o sea, tipo, ¿viste?, you know)\n2. Arregla puntuación y mayúsculas\n3. Mantené las contracciones y modismos rioplatenses\n4. NO parafrasees — preservá el orden de las palabras y el significado exacto\n5. Devolvé solo el texto limpio, sin preámbulo\n\nTranscripción:\n${output}".to_string(),
         },
         LLMPrompt {
             id: "ez_formal".to_string(),
-            name: "Formal (Ezequielito)".to_string(),
+            name: "Formal".to_string(),
             prompt: "Reescribe esta transcripción en tono profesional formal para email a cliente:\n1. Sin muletillas, sin contracciones (no uses 'pa', 'pal', 'tipo')\n2. Tuteo respetuoso (no 'vos' / 'che', usar 'usted' si el contexto lo pide o tuteo formal)\n3. Puntuación correcta, mayúsculas correctas\n4. Mantené el significado pero podés mejorar la fluidez\n5. Devolvé solo el texto limpio, sin preámbulo ni explicaciones\n\nTranscripción:\n${output}".to_string(),
         },
         LLMPrompt {
             id: "ez_code".to_string(),
-            name: "Code (Ezequielito)".to_string(),
+            name: "Code".to_string(),
             prompt: "Esta transcripción es para pegar en un IDE o terminal de código:\n1. NO uses comillas tipográficas — solo comillas rectas \" '\n2. NO uses guiones largos — solo guion normal -\n3. Sin puntos finales si no son parte del código\n4. Mantené nombres de variables/funciones tal cual los dijo el speaker\n5. Para snake_case, kebab-case, camelCase: respetá la convención que mencione\n6. Devolvé solo el texto, listo para pegar\n\nTranscripción:\n${output}".to_string(),
         },
         // Phase 15 (Bundle 3): very casual prompt for Style → casual chats
@@ -703,7 +727,7 @@ fn default_post_process_prompts() -> Vec<LLMPrompt> {
         // a closer-to-spoken vibe.
         LLMPrompt {
             id: "ez_very_casual".to_string(),
-            name: "Very casual (Ezequielito)".to_string(),
+            name: "Very casual".to_string(),
             prompt: "Esta transcripción es para un chat re informal (WhatsApp, Discord):\n1. Quita muletillas\n2. Todo en minúscula, sin puntos finales\n3. Comas y signos de pregunta solo si son necesarios para entender\n4. Permitido el voseo, modismos y contracciones rioplatenses\n5. NO parafrasees — solo limpia\n6. Devolvé solo el texto limpio, sin preámbulo\n\nTranscripción:\n${output}".to_string(),
         },
     ]
@@ -792,20 +816,9 @@ fn ensure_post_process_defaults(settings: &mut AppSettings) -> bool {
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
 fn default_snippets() -> Vec<Snippet> {
-    vec![
-        Snippet {
-            trigger: "mi email".to_string(),
-            expansion: "ezequiellamasx@gmail.com".to_string(),
-        },
-        Snippet {
-            trigger: "mi calendly".to_string(),
-            expansion: "https://calendly.com/ezequiel-lamas".to_string(),
-        },
-        Snippet {
-            trigger: "mi firma".to_string(),
-            expansion: "Saludos,\nEzequiel Lamas\nUGC Studio".to_string(),
-        },
-    ]
+    // Ships empty: snippets are personal (email, links, signature) and each
+    // user adds their own from the Snippets view.
+    Vec::new()
 }
 
 fn default_hands_free_enabled() -> bool {
@@ -836,11 +849,23 @@ fn default_app_prompt_map() -> HashMap<String, String> {
         "windowsterminal",
         "powershell",
         "wt",
+        // macOS (app display names, lowercased)
+        "visual studio code",
+        "xcode",
+        "terminal",
+        "iterm2",
     ] {
         m.insert(app.to_string(), "ez_code".to_string());
     }
     // Mail / formal → ez_formal
-    for app in ["outlook", "olk", "thunderbird", "msoutlook"] {
+    for app in [
+        "outlook",
+        "olk",
+        "thunderbird",
+        "msoutlook",
+        "mail",
+        "microsoft outlook",
+    ] {
         m.insert(app.to_string(), "ez_formal".to_string());
     }
     // Chats / casual → ez_casual (also the implicit fallback for unknown apps)
@@ -851,6 +876,7 @@ fn default_app_prompt_map() -> HashMap<String, String> {
         "discord",
         "messenger",
         "skype",
+        "messages",
     ] {
         m.insert(app.to_string(), "ez_casual".to_string());
     }
@@ -990,8 +1016,9 @@ pub fn get_default_settings() -> AppSettings {
         ShortcutBinding {
             id: "transcribe_edit".to_string(),
             name: "Edit Mode".to_string(),
-            description: "Copy text first, then hold + dictate instruction. LLM rewrites and pastes."
-                .to_string(),
+            description:
+"Select text, then hold and dictate an instruction: it is rewritten in place. With nothing selected, it writes what you ask for."
+                    .to_string(),
             default_binding: String::new(),
             current_binding: String::new(),
         },
@@ -1021,8 +1048,7 @@ pub fn get_default_settings() -> AppSettings {
         ShortcutBinding {
             id: "transcribe_to_scratchpad".to_string(),
             name: "Transcribe to Scratchpad".to_string(),
-            description: "Dictate into the Scratchpad view (not the active app)."
-                .to_string(),
+            description: "Dictate into the Scratchpad view (not the active app).".to_string(),
             default_binding: String::new(),
             current_binding: String::new(),
         },
@@ -1049,6 +1075,11 @@ pub fn get_default_settings() -> AppSettings {
             "Transform: Summarize",
             "Read clipboard, summarize concisely (3-5 sentences), paste replacement.",
         ),
+        (
+            "add_selection_to_dictionary",
+            "Add selection to dictionary",
+            "Select a word or a name in any app and press this: it is added to your dictionary.",
+        ),
     ] {
         bindings.insert(
             id.to_string(),
@@ -1071,7 +1102,8 @@ pub fn get_default_settings() -> AppSettings {
         ShortcutBinding {
             id: "hands_free_toggle".to_string(),
             name: "Hands-free toggle".to_string(),
-            description: "Tap Space mid-recording to lock; tap again to stop. Wispr-style.".to_string(),
+            description: "Tap Space mid-recording to lock; tap again to stop. Wispr-style."
+                .to_string(),
             default_binding: "space".to_string(),
             current_binding: "space".to_string(),
         },
@@ -1094,6 +1126,10 @@ pub fn get_default_settings() -> AppSettings {
         translate_to_english: false,
         selected_language: "auto".to_string(),
         overlay_position: default_overlay_position(),
+        context_awareness: true,
+        vento_cleanup: true,
+        dictionary_dismissed: Vec::new(),
+        overlay_idle_pill: default_overlay_idle_pill(),
         debug_mode: false,
         log_level: default_log_level(),
         custom_words: Vec::new(),
@@ -1209,16 +1245,56 @@ pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
     settings
 }
 
+/// Where the stored settings are copied when they cannot be read as a whole.
+const UNREADABLE_SETTINGS_BACKUP_KEY: &str = "settings_unreadable_backup";
+
+/// Rebuilds settings from a stored value that no longer deserialises as a
+/// whole (a hand edit, a value whose shape changed between versions).
+///
+/// Starts from `defaults` and takes each stored top-level key that still
+/// fits; a key that does not is left at its default. Everything else the
+/// person had configured survives.
+fn salvage_settings(stored: &serde_json::Value, defaults: AppSettings) -> AppSettings {
+    let (Ok(serde_json::Value::Object(mut merged)), Some(stored)) =
+        (serde_json::to_value(&defaults), stored.as_object())
+    else {
+        return defaults;
+    };
+
+    for (key, value) in stored {
+        let previous = merged.insert(key.clone(), value.clone());
+        let still_valid =
+            serde_json::from_value::<AppSettings>(serde_json::Value::Object(merged.clone()))
+                .is_ok();
+        if !still_valid {
+            match previous {
+                Some(default_value) => merged.insert(key.clone(), default_value),
+                None => merged.remove(key),
+            };
+        }
+    }
+
+    serde_json::from_value(serde_json::Value::Object(merged)).unwrap_or(defaults)
+}
+
 pub fn get_settings(app: &AppHandle) -> AppSettings {
     let store = app
         .store(crate::portable::store_path(SETTINGS_STORE_PATH))
         .expect("Failed to initialize store");
 
     let mut settings = if let Some(settings_value) = store.get("settings") {
-        serde_json::from_value::<AppSettings>(settings_value).unwrap_or_else(|_| {
-            let default_settings = get_default_settings();
-            store.set("settings", serde_json::to_value(&default_settings).unwrap());
-            default_settings
+        serde_json::from_value::<AppSettings>(settings_value.clone()).unwrap_or_else(|e| {
+            // One unreadable value must not cost the person their
+            // dictionary, snippets and shortcuts: keep everything that still
+            // reads, and set what was there aside in case it is needed.
+            warn!(
+                "Settings could not be read ({}); salvaging what is valid",
+                e
+            );
+            store.set(UNREADABLE_SETTINGS_BACKUP_KEY, settings_value.clone());
+            let salvaged = salvage_settings(&settings_value, get_default_settings());
+            store.set("settings", serde_json::to_value(&salvaged).unwrap());
+            salvaged
         })
     } else {
         let default_settings = get_default_settings();
@@ -1267,6 +1343,44 @@ pub fn get_recording_retention_period(app: &AppHandle) -> RecordingRetentionPeri
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn one_unreadable_value_does_not_cost_the_rest_of_the_settings() {
+        let mut stored = serde_json::to_value(get_default_settings()).unwrap();
+        let object = stored.as_object_mut().unwrap();
+        object.insert(
+            "custom_words".to_string(),
+            serde_json::json!(["Vento", "Enroque"]),
+        );
+        object.insert("hands_free_enabled".to_string(), serde_json::json!(true));
+        // A value of the wrong shape, as a hand edit or an old version could leave.
+        object.insert("history_limit".to_string(), serde_json::json!("many"));
+        assert!(serde_json::from_value::<AppSettings>(stored.clone()).is_err());
+
+        let salvaged = salvage_settings(&stored, get_default_settings());
+
+        assert_eq!(salvaged.custom_words, vec!["Vento", "Enroque"]);
+        assert!(salvaged.hands_free_enabled);
+        assert_eq!(salvaged.history_limit, get_default_settings().history_limit);
+    }
+
+    #[test]
+    fn unknown_keys_and_non_objects_fall_back_safely() {
+        let mut stored = serde_json::to_value(get_default_settings()).unwrap();
+        stored.as_object_mut().unwrap().insert(
+            "removed_in_a_later_version".to_string(),
+            serde_json::json!(42),
+        );
+        let salvaged = salvage_settings(&stored, get_default_settings());
+        assert_eq!(salvaged.push_to_talk, get_default_settings().push_to_talk);
+
+        let from_garbage =
+            salvage_settings(&serde_json::json!("not an object"), get_default_settings());
+        assert_eq!(
+            from_garbage.push_to_talk,
+            get_default_settings().push_to_talk
+        );
+    }
+
     use super::*;
 
     #[test]

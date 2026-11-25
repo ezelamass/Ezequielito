@@ -3,6 +3,7 @@ mod active_window;
 mod app_launcher;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 mod apple_intelligence;
+mod assist;
 mod audio_feedback;
 pub mod audio_toolkit;
 pub mod cli;
@@ -10,17 +11,24 @@ mod clipboard;
 mod commands;
 mod helpers;
 mod input;
+mod learn;
 mod llm_client;
 mod managers;
 mod overlay;
 pub mod portable;
+mod selection;
 mod settings;
 mod shortcut;
 mod signal_handle;
 mod transcription_coordinator;
 mod tray;
 mod tray_i18n;
+mod update_check;
 mod utils;
+mod vento;
+mod vento_sync;
+#[cfg(target_os = "windows")]
+mod win_keys;
 
 pub use cli::CliArgs;
 #[cfg(debug_assertions)]
@@ -308,6 +316,17 @@ fn trigger_update_check(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Looks for a published version newer than the one running. `None` when
+/// up to date, or when update checks are turned off.
+#[tauri::command]
+#[specta::specta]
+async fn check_for_update(app: AppHandle) -> Result<Option<update_check::AvailableUpdate>, String> {
+    if !settings::get_settings(&app).update_checks_enabled {
+        return Ok(None);
+    }
+    update_check::check(&app.package_info().version.to_string()).await
+}
+
 #[tauri::command]
 #[specta::specta]
 fn show_main_window_command(app: AppHandle) -> Result<(), String> {
@@ -337,6 +356,9 @@ pub fn run(cli_args: CliArgs) {
             shortcut::change_translate_to_english_setting,
             shortcut::change_selected_language_setting,
             shortcut::change_overlay_position_setting,
+            shortcut::change_overlay_idle_pill_setting,
+            shortcut::change_context_awareness_setting,
+            shortcut::change_vento_cleanup_setting,
             shortcut::change_debug_mode_setting,
             shortcut::change_word_correction_threshold_setting,
             shortcut::change_extra_recording_buffer_setting,
@@ -385,6 +407,9 @@ pub fn run(cli_args: CliArgs) {
             trigger_update_check,
             show_main_window_command,
             commands::cancel_operation,
+            commands::confirm_recording,
+            commands::start_dictation_from_overlay,
+            commands::overlay_ready,
             commands::is_portable,
             commands::get_app_dir_path,
             commands::get_app_settings,
@@ -434,6 +459,14 @@ pub fn run(cli_args: CliArgs) {
             commands::history::update_history_limit,
             commands::history::update_recording_retention_period,
             helpers::clamshell::is_laptop,
+            commands::vento::vento_status,
+            commands::vento::vento_sign_in,
+            commands::vento::vento_sign_out,
+            commands::vento::vento_refresh,
+            commands::dictionary::get_dictionary_suggestions,
+            commands::dictionary::accept_dictionary_suggestion,
+            commands::dictionary::dismiss_dictionary_suggestion,
+            check_for_update,
         ])
         .events(collect_events![managers::history::HistoryUpdatePayload,]);
 
@@ -521,7 +554,7 @@ pub fn run(cli_args: CliArgs) {
             // for portable mode (redirects WebView2 cache to portable Data dir)
             let mut win_builder =
                 tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("/".into()))
-                    .title("Ezequielito")
+                    .title("Vento Voice")
                     .inner_size(680.0, 570.0)
                     .min_inner_size(680.0, 570.0)
                     .resizable(true)
@@ -548,6 +581,7 @@ pub fn run(cli_args: CliArgs) {
             FILE_LOG_LEVEL.store(file_log_level.to_level_filter() as u8, Ordering::Relaxed);
             let app_handle = app.handle().clone();
             app.manage(TranscriptionCoordinator::new(app_handle.clone()));
+            commands::vento::init(&app_handle);
 
             initialize_core_logic(&app_handle);
 

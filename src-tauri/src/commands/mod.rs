@@ -1,7 +1,9 @@
 pub mod audio;
+pub mod dictionary;
 pub mod history;
 pub mod models;
 pub mod transcription;
+pub mod vento;
 
 use crate::settings::{get_settings, write_settings, AppSettings, LogLevel};
 use crate::utils::cancel_current_operation;
@@ -12,6 +14,33 @@ use tauri_plugin_opener::OpenerExt;
 #[specta::specta]
 pub fn cancel_operation(app: AppHandle) {
     cancel_current_operation(&app);
+}
+
+/// Stop the active recording and transcribe it (overlay confirm button).
+/// Unlike `cancel_operation`, the audio is kept and pasted.
+#[tauri::command]
+#[specta::specta]
+pub fn confirm_recording(app: AppHandle) {
+    if let Some(coordinator) = app.try_state::<crate::TranscriptionCoordinator>() {
+        coordinator.stop_active();
+    }
+}
+
+/// Start a hands-free dictation from the idle pill (mouse click).
+#[tauri::command]
+#[specta::specta]
+pub fn start_dictation_from_overlay(app: AppHandle) {
+    if let Some(coordinator) = app.try_state::<crate::TranscriptionCoordinator>() {
+        coordinator.start_from_overlay();
+    }
+}
+
+/// The overlay webview finished loading and is listening for events: put
+/// it in its resting state (idle pill or hidden).
+#[tauri::command]
+#[specta::specta]
+pub fn overlay_ready(app: AppHandle) {
+    crate::utils::refresh_idle_overlay(&app);
 }
 
 #[tauri::command]

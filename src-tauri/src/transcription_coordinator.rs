@@ -24,7 +24,22 @@ enum Command {
     /// Phase 6: Space tapped mid-recording. First tap = lock the recording
     /// (skip the next PTT release); second tap = stop the recording.
     ToggleHandsFree,
+    /// Stop the active recording and transcribe it, whatever started it
+    /// (overlay confirm button, tray, CLI). No-op when not recording.
+    StopActive,
+    /// Start a hands-free dictation from the idle pill (mouse click). There
+    /// is no key being held, so the recording starts already locked and
+    /// ends with `StopActive` (✓) or `Cancel` (✕).
+    StartFromOverlay,
+    /// Something that is not a dictation (a Transform) wants the pipeline:
+    /// the clipboard, the paste, the pill. Granted only when idle; the
+    /// answer goes back on the channel and the stage becomes `Processing`
+    /// until `ProcessingFinished`.
+    BeginExternal(Sender<bool>),
 }
+
+/// Binding the idle pill starts when clicked.
+const OVERLAY_BINDING: &str = "transcribe";
 
 /// Pipeline lifecycle, owned exclusively by the coordinator thread.
 enum Stage {
@@ -158,6 +173,38 @@ impl TranscriptionCoordinator {
                                 debug!("ToggleHandsFree ignored — not recording");
                             }
                         }
+                        Command::BeginExternal(reply) => {
+                            let granted = matches!(stage, Stage::Idle);
+                            // The requester may have given up waiting; a
+                            // grant nobody received must not hold the
+                            // pipeline (nobody would ever release it).
+                            if reply.send(granted).is_ok() && granted {
+                                stage = Stage::Processing;
+                            }
+                        }
+                        Command::StartFromOverlay => {
+                            if matches!(stage, Stage::Idle) {
+                                start(&app, &mut stage, OVERLAY_BINDING, "overlay");
+                                if matches!(stage, Stage::Recording(_)) {
+                                    hands_free_locked = true;
+                                    let _ = app.emit("hands-free-locked", true);
+                                }
+                            } else {
+                                debug!("StartFromOverlay ignored — pipeline busy");
+                            }
+                        }
+                        Command::StopActive => {
+                            if let Stage::Recording(active_binding) = &stage {
+                                let active = active_binding.clone();
+                                if hands_free_locked {
+                                    hands_free_locked = false;
+                                    let _ = app.emit("hands-free-locked", false);
+                                }
+                                stop(&app, &mut stage, &active, "overlay");
+                            } else {
+                                debug!("StopActive ignored — not recording");
+                            }
+                        }
                     }
                 }
                 debug!("Transcription coordinator exited");
@@ -215,6 +262,40 @@ impl TranscriptionCoordinator {
     /// to lock the recording or stop it based on its internal flag.
     pub fn toggle_hands_free(&self) {
         if self.tx.send(Command::ToggleHandsFree).is_err() {
+            warn!("Transcription coordinator channel closed");
+        }
+    }
+
+    /// Reserves the pipeline for work that is not a dictation. Returns
+    /// `true` when it was idle; the caller then owns it and MUST call
+    /// `notify_processing_finished` when done. While reserved, dictation
+    /// hotkeys are ignored, exactly as they are while a dictation is being
+    /// transcribed.
+    ///
+    /// Blocks briefly on the coordinator thread's answer; never call it
+    /// from that thread (i.e. from inside a `ShortcutAction` it invoked).
+    pub fn try_begin_external(&self) -> bool {
+        let (reply_tx, reply_rx) = mpsc::channel();
+        if self.tx.send(Command::BeginExternal(reply_tx)).is_err() {
+            warn!("Transcription coordinator channel closed");
+            return false;
+        }
+        reply_rx
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap_or(false)
+    }
+
+    /// Start a hands-free dictation from the idle pill.
+    pub fn start_from_overlay(&self) {
+        if self.tx.send(Command::StartFromOverlay).is_err() {
+            warn!("Transcription coordinator channel closed");
+        }
+    }
+
+    /// Stop the active recording and send it through the normal
+    /// transcribe → paste pipeline. Used by the overlay confirm button.
+    pub fn stop_active(&self) {
+        if self.tx.send(Command::StopActive).is_err() {
             warn!("Transcription coordinator channel closed");
         }
     }
