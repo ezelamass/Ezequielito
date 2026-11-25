@@ -2,10 +2,11 @@ use crate::active_window::ActiveApp;
 use crate::app_launcher;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 use crate::apple_intelligence;
-use crate::assist::{self, AssistError};
+use crate::assist::{self, AssistError, AssistRequest};
 use crate::audio_feedback::{play_feedback_sound, play_feedback_sound_blocking, SoundType};
 use crate::audio_toolkit::constants::WHISPER_SAMPLE_RATE;
 use crate::audio_toolkit::{is_microphone_access_denied, is_no_input_device_error};
+use crate::learn;
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::history::{DictationMeta, HistoryManager};
 use crate::managers::transcription::TranscriptionManager;
@@ -17,6 +18,8 @@ use crate::tray::{change_tray_icon, TrayIconState};
 use crate::utils::{
     self, show_processing_overlay, show_recording_overlay, show_transcribing_overlay,
 };
+use crate::vento::{VentoAccount, VentoError, VoiceRequest};
+use crate::vento_sync::style_for_prompt;
 use crate::TranscriptionCoordinator;
 use ferrous_opencc::{config::BuiltinConfig, OpenCC};
 use log::{debug, error, warn};
@@ -414,6 +417,34 @@ pub(crate) struct ProcessedTranscription {
     pub final_text: String,
     pub post_processed_text: Option<String>,
     pub post_process_prompt: Option<String>,
+    /// A cleanup was asked for, whether or not it produced text. Stored
+    /// with the entry so a retry from History tries again.
+    pub cleanup_requested: bool,
+}
+
+/// Longest a dictation waits for the Vento cleanup, token refresh
+/// included, before it is pasted as transcribed.
+const VENTO_CLEANUP_DEADLINE: std::time::Duration = std::time::Duration::from_secs(6);
+
+/// Style prompts that ship with the app. A prompt outside this list is the
+/// person's own, and only the local provider can run it.
+fn is_builtin_prompt(prompt_id: &str) -> bool {
+    matches!(
+        prompt_id,
+        "default_improve_transcriptions" | "ez_casual" | "ez_very_casual" | "ez_formal" | "ez_code"
+    )
+}
+
+/// Whether a provider and a model are configured for local post-processing.
+fn local_provider_ready(settings: &AppSettings) -> bool {
+    settings
+        .active_post_process_provider()
+        .is_some_and(|provider| {
+            settings
+                .post_process_models
+                .get(&provider.id)
+                .is_some_and(|model| !model.trim().is_empty())
+        })
 }
 
 pub(crate) async fn process_transcription_output(
@@ -422,6 +453,7 @@ pub(crate) async fn process_transcription_output(
     post_process: bool,
     prompt_id_override: Option<&str>,
     context: Option<&ActiveApp>,
+    allow_vento: bool,
 ) -> ProcessedTranscription {
     let settings = get_settings(app);
     let mut final_text = transcription.to_string();
@@ -432,7 +464,69 @@ pub(crate) async fn process_transcription_output(
         final_text = converted_text;
     }
 
-    if post_process {
+    // Signed in to Vento: every dictation is cleaned there, in the style of
+    // the binding or, without one, of the app it is going to. If Vento
+    // cannot answer in time, the text falls through to the local path below
+    // (and, with no provider configured, is pasted as transcribed): a
+    // dictation is never lost to a failed cleanup.
+    //
+    // Exception: the binding asked for post-processing with a prompt the
+    // person wrote themselves (a translation, a house style). Vento only
+    // knows the built-in styles, so that one stays with the local provider.
+    let requested_prompt = prompt_id_override.map(str::to_string).or_else(|| {
+        post_process
+            .then(|| settings.post_process_selected_prompt_id.clone())
+            .flatten()
+    });
+    let own_prompt = post_process
+        && requested_prompt
+            .as_deref()
+            .is_some_and(|id| !is_builtin_prompt(id))
+        && local_provider_ready(&settings);
+
+    let mut cleaned_by_vento = false;
+    let mut vento_tried = false;
+    if let Some(account) =
+        vento_cleanup_account(app, &settings, allow_vento).filter(|_| !own_prompt)
+    {
+        vento_tried = true;
+        let style_prompt = prompt_id_override
+            .map(str::to_string)
+            .or_else(|| context.and_then(|app| settings.app_prompt_map.get(&app.process).cloned()));
+        let style = style_for_prompt(style_prompt.as_deref());
+        let shared_context = context.filter(|_| settings.context_awareness);
+        let request = VoiceRequest::Clean {
+            text: &final_text,
+            style,
+            app: shared_context.map(|app| app.process.as_str()),
+            window_title: shared_context.and_then(|app| app.title.as_deref()),
+            dictionary: &settings.custom_words,
+        };
+        match tokio::time::timeout(VENTO_CLEANUP_DEADLINE, account.voice(request)).await {
+            Ok(Ok(response)) if !response.truncated => {
+                post_processed_text = Some(response.text.clone());
+                post_process_prompt = Some(format!("Vento · {}", style));
+                final_text = response.text;
+                cleaned_by_vento = true;
+            }
+            Ok(Ok(_)) => warn!("Vento cleanup came back cut short; keeping the transcription"),
+            Ok(Err(e)) => {
+                warn!("Vento cleanup failed: {:?}", e);
+                if matches!(e, VentoError::NotSignedIn | VentoError::DailyLimit) {
+                    // The account screen should show why cleanups stopped.
+                    let _ = app.emit(crate::commands::vento::ACCOUNT_CHANGED_EVENT, ());
+                }
+            }
+            Err(_) => warn!(
+                "Vento cleanup did not answer in {:?}; keeping the transcription",
+                VENTO_CLEANUP_DEADLINE
+            ),
+        }
+    }
+
+    if cleaned_by_vento {
+        // Nothing else to do.
+    } else if post_process {
         if let Some(processed_text) =
             post_process_transcription(&settings, &final_text, prompt_id_override, context).await
         {
@@ -461,7 +555,21 @@ pub(crate) async fn process_transcription_output(
         final_text,
         post_processed_text,
         post_process_prompt,
+        cleanup_requested: post_process || vento_tried,
     }
+}
+
+/// The Vento account to clean a dictation with, when that applies: the
+/// caller allows it, the setting is on and the account is usable.
+fn vento_cleanup_account(
+    app: &AppHandle,
+    settings: &AppSettings,
+    allow_vento: bool,
+) -> Option<Arc<VentoAccount>> {
+    if !allow_vento || !settings.vento_cleanup {
+        return None;
+    }
+    crate::commands::vento::account(app).filter(|account| account.is_ready())
 }
 
 impl ShortcutAction for TranscribeAction {
@@ -541,6 +649,14 @@ impl ShortcutAction for TranscribeAction {
             // Phase 6: dynamically register the hands-free toggle (Space)
             // so it only hijacks Space while recording is active.
             shortcut::register_hands_free_shortcut(app);
+
+            // While the person talks, get the Vento connection and token
+            // ready so the cleanup does not pay for them afterwards.
+            if let Some(account) =
+                crate::commands::vento::account(app).filter(|account| account.is_ready())
+            {
+                tauri::async_runtime::spawn(async move { account.prewarm().await });
+            }
         } else {
             // Starting failed (for example due to blocked microphone permissions).
             // Revert UI state so we don't stay stuck in the recording overlay.
@@ -710,12 +826,18 @@ impl ShortcutAction for TranscribeAction {
                     match transcription_result {
                         Ok(transcription) => {
                             debug!(
-                                "Transcription completed in {:?}: '{}'",
+                                "Transcription completed in {:?}: {} chars",
                                 transcription_time.elapsed(),
-                                transcription
+                                transcription.chars().count()
                             );
 
-                            if post_process {
+                            // Voice commands and Edit Mode instructions are
+                            // used as spoken, never cleaned.
+                            let allow_vento = !voice_command && !edit_mode;
+                            if post_process
+                                || vento_cleanup_account(&ah, &get_settings(&ah), allow_vento)
+                                    .is_some()
+                            {
                                 show_processing_overlay(&ah);
                             }
                             // Phase 11 (rescue): auto-context wins over static override.
@@ -731,6 +853,7 @@ impl ShortcutAction for TranscribeAction {
                                 post_process,
                                 effective_prompt_id,
                                 target_app.as_ref(),
+                                allow_vento,
                             )
                             .await;
 
@@ -739,7 +862,9 @@ impl ShortcutAction for TranscribeAction {
                                 if let Err(err) = hm.save_entry(
                                     file_name,
                                     transcription,
-                                    post_process,
+                                    // Also true when Vento was tried,
+                                    // so a retry from History cleans it.
+                                    processed.cleanup_requested,
                                     processed.post_processed_text.clone(),
                                     processed.post_process_prompt.clone(),
                                     dictation_meta.clone(),
@@ -769,11 +894,11 @@ impl ShortcutAction for TranscribeAction {
                             let mut edit_error: Option<OverlayError> = None;
                             if edit_mode && !final_text.trim().is_empty() {
                                 show_processing_overlay(&ah);
-                                let (system_prompt, user_content) = assist::build_edit_request(
-                                    edit_selection.as_deref(),
-                                    &final_text,
-                                );
-                                match assist::complete(&ah, system_prompt, user_content).await {
+                                let request = AssistRequest::Edit {
+                                    selection: edit_selection.as_deref(),
+                                    instruction: &final_text,
+                                };
+                                match assist::run(&ah, request).await {
                                     Ok(rewritten) => final_text = rewritten,
                                     Err(e) => {
                                         warn!("Edit Mode: {:?}", e);
@@ -931,6 +1056,8 @@ fn overlay_error_for(error: &AssistError) -> OverlayError {
 // selection.
 struct TransformAction {
     name: &'static str,
+    /// The name Vento knows this transform by.
+    kind: &'static str,
     system_prompt: &'static str,
 }
 
@@ -943,6 +1070,7 @@ impl ShortcutAction for TransformAction {
 
     fn stop(&self, app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
         let name = self.name;
+        let kind = self.kind;
         let system_prompt = self.system_prompt;
         let ah = app.clone();
 
@@ -977,7 +1105,12 @@ impl ShortcutAction for TransformAction {
             show_processing_overlay(&ah);
 
             tauri::async_runtime::spawn(async move {
-                match assist::complete(&ah, system_prompt, selection).await {
+                let request = AssistRequest::Transform {
+                    kind,
+                    system_prompt,
+                    text: &selection,
+                };
+                match assist::run(&ah, request).await {
                     Ok(new_text) => {
                         let ah_clone = ah.clone();
                         ah.run_on_main_thread(move || {
@@ -1010,6 +1143,49 @@ impl ShortcutAction for TransformAction {
                     }
                 }
             });
+        });
+    }
+}
+
+// Adds the word (or short name) selected in the foreground app to the
+// dictionary. Same release-then-copy pattern as a Transform.
+struct AddToDictionaryAction;
+
+impl ShortcutAction for AddToDictionaryAction {
+    fn start(&self, _app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
+        // Nothing on press: see `TransformAction::start`.
+    }
+
+    fn stop(&self, app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
+        let ah = app.clone();
+        std::thread::spawn(move || {
+            let Some(coordinator) = ah.try_state::<TranscriptionCoordinator>() else {
+                return;
+            };
+            if !coordinator.try_begin_external() {
+                debug!("Add to dictionary ignored: the pipeline is busy");
+                return;
+            }
+            let _guard = FinishGuard(ah.clone());
+
+            let target_app = crate::active_window::active_app();
+            let word = selected_text(&ah, target_app.as_ref())
+                .as_deref()
+                .and_then(learn::word_from_selection);
+            let Some(word) = word else {
+                utils::show_error_overlay(&ah, OverlayError::NoSelection);
+                return;
+            };
+
+            let mut settings = get_settings(&ah);
+            if learn::add_word(&mut settings.custom_words, &word) {
+                crate::settings::write_settings(&ah, settings);
+                crate::commands::vento::profile_changed(&ah);
+                let _ = ah.emit("dictionary-changed", ());
+                utils::show_error_overlay(&ah, OverlayError::WordAdded);
+            } else {
+                utils::show_error_overlay(&ah, OverlayError::WordKnown);
+            }
         });
     }
 }
@@ -1175,6 +1351,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
         "transform_polish".to_string(),
         Arc::new(TransformAction {
             name: "Polish",
+            kind: "polish",
             system_prompt: "You are a writing assistant. Rewrite the user's text to improve clarity, conciseness, and grammar while preserving the original meaning, voice, and language. Return ONLY the rewritten text, with no preamble, quotes, or markdown.",
         }) as Arc<dyn ShortcutAction>,
     );
@@ -1182,6 +1359,7 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
         "transform_prompt_engineer".to_string(),
         Arc::new(TransformAction {
             name: "Prompt Engineer",
+            kind: "prompt_engineer",
             system_prompt: "You are a prompt engineer. Rewrite the user's text as a well-structured LLM prompt: clear role, explicit task, constraints, expected output format. Keep the user's original intent. Return ONLY the new prompt, no preamble or commentary.",
         }) as Arc<dyn ShortcutAction>,
     );
@@ -1189,8 +1367,13 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
         "transform_summarize".to_string(),
         Arc::new(TransformAction {
             name: "Summarize",
+            kind: "summarize",
             system_prompt: "Summarize the user's text in 3-5 concise sentences. Keep the original language. Preserve the key facts and the speaker's tone. Return ONLY the summary, no preamble, no bullet points unless the original used them.",
         }) as Arc<dyn ShortcutAction>,
+    );
+    map.insert(
+        "add_selection_to_dictionary".to_string(),
+        Arc::new(AddToDictionaryAction) as Arc<dyn ShortcutAction>,
     );
     map.insert(
         "cancel".to_string(),

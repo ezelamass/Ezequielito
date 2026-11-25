@@ -378,6 +378,13 @@ pub struct AppSettings {
     /// so it can match the tone and spell names that appear there.
     #[serde(default = "default_true")]
     pub context_awareness: bool,
+    /// Dictionary suggestions the person said no to; never offered again.
+    #[serde(default)]
+    pub dictionary_dismissed: Vec<String>,
+    /// While signed in to Vento, clean up every dictation there (fillers,
+    /// self-corrections, punctuation, tone). Off: paste the raw transcription.
+    #[serde(default = "default_true")]
+    pub vento_cleanup: bool,
     /// Keep a small pill on screen while idle; clicking it starts dictation.
     #[serde(default = "default_overlay_idle_pill")]
     pub overlay_idle_pill: bool,
@@ -1068,6 +1075,11 @@ pub fn get_default_settings() -> AppSettings {
             "Transform: Summarize",
             "Read clipboard, summarize concisely (3-5 sentences), paste replacement.",
         ),
+        (
+            "add_selection_to_dictionary",
+            "Add selection to dictionary",
+            "Select a word or a name in any app and press this: it is added to your dictionary.",
+        ),
     ] {
         bindings.insert(
             id.to_string(),
@@ -1115,6 +1127,8 @@ pub fn get_default_settings() -> AppSettings {
         selected_language: "auto".to_string(),
         overlay_position: default_overlay_position(),
         context_awareness: true,
+        vento_cleanup: true,
+        dictionary_dismissed: Vec::new(),
         overlay_idle_pill: default_overlay_idle_pill(),
         debug_mode: false,
         log_level: default_log_level(),

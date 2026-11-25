@@ -8,6 +8,13 @@ import type { Page } from "@playwright/test";
 export interface TauriMockOptions {
   /** Return value per command name. Missing commands resolve to `null`. */
   responses?: Record<string, unknown>;
+  /**
+   * Commands that fail, with the value they reject with (what a Rust
+   * command returns in its `Err`). Takes precedence over `responses`.
+   */
+  errors?: Record<string, unknown>;
+  /** Platform the OS plugin reports. Defaults to `linux`. */
+  platform?: "linux" | "macos" | "windows";
 }
 
 export interface TauriCall {
@@ -19,7 +26,12 @@ export async function installTauriMock(
   page: Page,
   options: TauriMockOptions = {},
 ): Promise<void> {
-  await page.addInitScript((responses: Record<string, unknown>) => {
+  const config = {
+    responses: options.responses ?? {},
+    errors: options.errors ?? {},
+    platform: options.platform ?? "linux",
+  };
+  await page.addInitScript(({ responses, errors, platform }: typeof config) => {
     const callbacks = new Map<number, (payload: unknown) => void>();
     const listeners = new Map<string, number[]>();
     const calls: { cmd: string; args: Record<string, unknown> }[] = [];
@@ -58,8 +70,20 @@ export async function installTauriMock(
           return null;
         }
         calls.push({ cmd, args });
+        if (cmd in errors) throw errors[cmd];
         return cmd in responses ? responses[cmd] : null;
       },
+    };
+
+    // `@tauri-apps/plugin-os` reads these synchronously, without a command.
+    w.__TAURI_OS_PLUGIN_INTERNALS__ = {
+      platform,
+      os_type: platform,
+      family: platform === "windows" ? "windows" : "unix",
+      version: "0.0.0",
+      arch: "x86_64",
+      exe_extension: platform === "windows" ? "exe" : "",
+      eol: platform === "windows" ? "\r\n" : "\n",
     };
 
     w.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
@@ -72,9 +96,48 @@ export async function installTauriMock(
       }
     };
     w.__tauriCalls = calls;
+    w.__tauriSetResponse = (cmd: string, value: unknown) => {
+      delete errors[cmd];
+      responses[cmd] = value;
+    };
+    w.__tauriSetError = (cmd: string, error: unknown) => {
+      errors[cmd] = error;
+    };
     w.__tauriListening = (event: string) =>
       (listeners.get(event) ?? []).length > 0;
-  }, options.responses ?? {});
+  }, config);
+}
+
+/** From now on, `cmd` resolves to `value`. */
+export async function setTauriResponse(
+  page: Page,
+  cmd: string,
+  value: unknown,
+): Promise<void> {
+  await page.evaluate(
+    ([name, data]) => {
+      const set = (window as unknown as Record<string, unknown>)
+        .__tauriSetResponse as (cmd: string, value: unknown) => void;
+      set(name as string, data);
+    },
+    [cmd, value],
+  );
+}
+
+/** From now on, `cmd` fails with `error`, until a response is set for it. */
+export async function setTauriError(
+  page: Page,
+  cmd: string,
+  error: unknown,
+): Promise<void> {
+  await page.evaluate(
+    ([name, data]) => {
+      const set = (window as unknown as Record<string, unknown>)
+        .__tauriSetError as (cmd: string, error: unknown) => void;
+      set(name as string, data);
+    },
+    [cmd, error],
+  );
 }
 
 /** Emits a backend event into the page. */

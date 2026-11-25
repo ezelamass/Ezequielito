@@ -3,6 +3,7 @@ import { Mic, Keyboard } from "lucide-react";
 import { Trans, useTranslation } from "react-i18next";
 import { commands } from "@/bindings";
 import { useSettings } from "../../hooks/useSettings";
+import { VentoAccount } from "../account/VentoAccount";
 
 /**
  * Phase 13 Home view — dashboard with stats and configured hotkeys.
@@ -49,6 +50,8 @@ export const HomeView: React.FC = () => {
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-8 py-4">
+      <VentoAccount variant="card" />
+
       <header className="space-y-1">
         <h1 className="font-serif italic text-5xl text-accent">
           {t("app.name")}

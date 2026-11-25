@@ -894,5 +894,40 @@
       "copyFailed": "Couldn't copy",
       "confirmClear": "Clear all Scratchpad content? This action can't be undone."
     }
+  },
+  "account": {
+    "section": "Account",
+    "title": "Vento account",
+    "signIn": {
+      "description": "Sign in with your Vento account and your dictations come out clean (fillers removed, self-corrections resolved, punctuation in place) with no API key.",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Sign in",
+      "submitting": "Signing in..."
+    },
+    "signOut": "Sign out",
+    "status": {
+      "active": "Cleanup is active",
+      "paused": "Cleanup is off",
+      "notEnabled": "This account doesn't have Vento Voice enabled yet",
+      "checking": "Checking your account..."
+    },
+    "cleanup": {
+      "title": "Clean up with Vento",
+      "description": "While you're signed in, Vento cleans up every dictation before it's pasted. Turn it off to paste the text exactly as it was transcribed."
+    },
+    "sync": {
+      "title": "Dictionary, snippets and styles",
+      "description": "Your dictionary, your snippets and your per-app styles follow your account from one computer to the next.",
+      "button": "Sync now",
+      "syncing": "Syncing...",
+      "success": "Everything is in sync"
+    },
+    "errors": {
+      "invalidCredentials": "Wrong email or password.",
+      "network": "No connection. Check your internet and try again.",
+      "notSignedIn": "Your session ended. Sign in again.",
+      "generic": "Vento had a problem. Try again in a moment."
+    }
   }
 }

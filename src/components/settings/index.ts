@@ -1,4 +1,5 @@
 // Settings section components
+export { AccountSettings } from "./account/AccountSettings";
 export { GeneralSettings } from "./general/GeneralSettings";
 export { AdvancedSettings } from "./advanced/AdvancedSettings";
 export { DebugSettings } from "./debug/DebugSettings";

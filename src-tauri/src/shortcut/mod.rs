@@ -620,6 +620,15 @@ pub fn change_overlay_position_setting(app: AppHandle, position: String) -> Resu
 
 #[tauri::command]
 #[specta::specta]
+pub fn change_vento_cleanup_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.vento_cleanup = enabled;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn change_context_awareness_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
     settings.context_awareness = enabled;
@@ -729,6 +738,7 @@ pub fn update_custom_words(app: AppHandle, words: Vec<String>) -> Result<(), Str
     let mut settings = settings::get_settings(&app);
     settings.custom_words = words;
     settings::write_settings(&app, settings);
+    crate::commands::vento::profile_changed(&app);
     Ok(())
 }
 
@@ -738,6 +748,7 @@ pub fn update_snippets(app: AppHandle, snippets: Vec<settings::Snippet>) -> Resu
     let mut current = settings::get_settings(&app);
     current.snippets = snippets;
     settings::write_settings(&app, current);
+    crate::commands::vento::profile_changed(&app);
     Ok(())
 }
 
@@ -792,6 +803,7 @@ pub fn update_app_prompt_map(
     let mut current = settings::get_settings(&app);
     current.app_prompt_map = map;
     settings::write_settings(&app, current);
+    crate::commands::vento::profile_changed(&app);
     Ok(())
 }
 
@@ -866,6 +878,7 @@ pub fn sync_dictionary_now(app: AppHandle) -> Result<Vec<String>, String> {
 
     current.custom_words = merged.clone();
     settings::write_settings(&app, current);
+    crate::commands::vento::profile_changed(&app);
     Ok(merged)
 }
 

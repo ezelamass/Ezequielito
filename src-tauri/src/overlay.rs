@@ -79,6 +79,10 @@ pub enum OverlayError {
     NoSelection,
     AiNotConfigured,
     AiFailed,
+    /// Not a failure: the selected word went into the dictionary.
+    WordAdded,
+    /// The selected word was already in the dictionary.
+    WordKnown,
     Generic,
 }
 
@@ -94,6 +98,8 @@ impl OverlayError {
             OverlayError::NoSelection => "no_selection",
             OverlayError::AiNotConfigured => "ai_not_configured",
             OverlayError::AiFailed => "ai_failed",
+            OverlayError::WordAdded => "word_added",
+            OverlayError::WordKnown => "word_known",
             OverlayError::Generic => "generic",
         }
     }

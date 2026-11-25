@@ -894,5 +894,40 @@
       "copyFailed": "No se pudo copiar",
       "confirmClear": "¿Borrar todo el contenido del Scratchpad? Esta acción no se puede deshacer."
     }
+  },
+  "account": {
+    "section": "Cuenta",
+    "title": "Cuenta de Vento",
+    "signIn": {
+      "description": "Iniciá sesión con tu cuenta de Vento y tus dictados salen limpios (sin muletillas, con las correcciones resueltas y con puntuación), sin cargar ninguna API key.",
+      "email": "Mail",
+      "password": "Contraseña",
+      "submit": "Iniciar sesión",
+      "submitting": "Iniciando sesión..."
+    },
+    "signOut": "Cerrar sesión",
+    "status": {
+      "active": "Limpieza activa",
+      "paused": "Limpieza apagada",
+      "notEnabled": "Esta cuenta todavía no tiene Vento Voice activado",
+      "checking": "Revisando tu cuenta..."
+    },
+    "cleanup": {
+      "title": "Limpiar con Vento",
+      "description": "Con la sesión iniciada, Vento limpia cada dictado antes de pegarlo. Apagalo para pegar el texto tal como se transcribió."
+    },
+    "sync": {
+      "title": "Diccionario, snippets y estilos",
+      "description": "Tu diccionario, tus snippets y tus estilos por app te siguen de una computadora a otra con tu cuenta.",
+      "button": "Sincronizar ahora",
+      "syncing": "Sincronizando...",
+      "success": "Todo sincronizado"
+    },
+    "errors": {
+      "invalidCredentials": "Mail o contraseña incorrectos.",
+      "network": "Sin conexión. Revisá tu internet y probá de nuevo.",
+      "notSignedIn": "Se cerró tu sesión. Iniciá sesión de nuevo.",
+      "generic": "Vento tuvo un problema. Probá de nuevo en un rato."
+    }
   }
 }

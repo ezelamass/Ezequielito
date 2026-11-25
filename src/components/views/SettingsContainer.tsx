@@ -1,9 +1,18 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Cog, FlaskConical, History, Info, Sparkles, Cpu } from "lucide-react";
+import {
+  Cog,
+  FlaskConical,
+  History,
+  Info,
+  Sparkles,
+  Cpu,
+  User,
+} from "lucide-react";
 import HandyHand from "../icons/HandyHand";
 import { useSettings } from "../../hooks/useSettings";
 import {
+  AccountSettings,
   GeneralSettings,
   AdvancedSettings,
   HistorySettings,
@@ -23,6 +32,7 @@ import {
  */
 
 type SubSection =
+  | "account"
   | "general"
   | "models"
   | "advanced"
@@ -40,6 +50,13 @@ interface SubSectionConfig {
 }
 
 const SUB_SECTIONS: SubSectionConfig[] = [
+  {
+    id: "account",
+    labelKey: "account.section",
+    icon: User,
+    component: AccountSettings,
+    enabled: () => true,
+  },
   {
     id: "general",
     labelKey: "sidebar.general",

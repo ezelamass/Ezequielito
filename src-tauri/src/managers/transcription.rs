@@ -724,7 +724,12 @@ impl TranscriptionManager {
         if final_result.is_empty() {
             info!("Transcription result is empty");
         } else {
-            info!("Transcription result: {}", final_result);
+            // The text itself stays out of the log: the log file is not a
+            // place for what the person dictated.
+            info!(
+                "Transcription result: {} chars",
+                final_result.chars().count()
+            );
         }
 
         self.maybe_unload_immediately("transcription");

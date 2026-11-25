@@ -68,6 +68,9 @@ interface SettingsStore {
 // Note: Default settings are now fetched from Rust via commands.getDefaultSettings()
 // This ensures platform-specific defaults (like overlay_position, shortcuts, paste_method) work correctly
 
+/** Set once the app-lifetime backend listeners are registered. */
+let backendListenersRegistered = false;
+
 const DEFAULT_AUDIO_DEVICE: AudioDevice = {
   index: "default",
   name: "Default",
@@ -116,6 +119,8 @@ const settingUpdaters: {
     commands.changeOverlayPositionSetting(value as string),
   context_awareness: (value) =>
     commands.changeContextAwarenessSetting(value as boolean),
+  vento_cleanup: (value) =>
+    commands.changeVentoCleanupSetting(value as boolean),
   overlay_idle_pill: (value) =>
     commands.changeOverlayIdlePillSetting(value as boolean),
   debug_mode: (value) => commands.changeDebugModeSetting(value as boolean),
@@ -599,9 +604,21 @@ export const useSettingsStore = create<SettingsStore>()(
         checkCustomSounds(),
       ]);
 
+      // `initialize` runs once per component that mounts while the store is
+      // still loading; the listeners below live as long as the app does and
+      // must only be registered by the first call.
+      if (backendListenersRegistered) return;
+      backendListenersRegistered = true;
+
       // Re-fetch settings when the backend changes them (e.g. language
       // reset during model switch). The backend is the source of truth.
       listen("model-state-changed", () => {
+        get().refreshSettings();
+      });
+
+      // The Vento account replaced the dictionary, the snippets or the
+      // per-app styles with what the account has.
+      listen("vento-profile-synced", () => {
         get().refreshSettings();
       });
     },

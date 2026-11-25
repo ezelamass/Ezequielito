@@ -1,9 +1,10 @@
 //! One door to the language model for everything that rewrites or writes
-//! text on the user's behalf (Edit Mode, Transforms). Callers hand over a
-//! system prompt and the user content; where the request goes (the
-//! provider configured in settings today) is decided here.
+//! text on the user's behalf (Edit Mode, Transforms). Callers say what
+//! they want; where the request goes (Vento when signed in, otherwise the
+//! provider configured in settings) is decided here.
 
 use crate::settings::{get_settings, AppSettings};
+use crate::vento::{VentoError, VoiceRequest};
 use log::{debug, error};
 use tauri::AppHandle;
 
@@ -21,8 +22,83 @@ pub enum AssistError {
     Failed(String),
 }
 
-/// Sends one request and returns the model's text, trimmed.
-pub async fn complete(
+/// What the caller wants written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AssistRequest<'a> {
+    /// Apply a dictated instruction to the selected text; with nothing
+    /// selected, write what the instruction asks for.
+    Edit {
+        selection: Option<&'a str>,
+        instruction: &'a str,
+    },
+    /// Run a built-in rewrite over the selected text. `kind` is the name
+    /// Vento knows it by; `system_prompt` is used with a local provider.
+    Transform {
+        kind: &'static str,
+        system_prompt: &'static str,
+        text: &'a str,
+    },
+}
+
+/// Runs a request and returns the text, trimmed.
+///
+/// Signed in to Vento, the request goes there (no API key needed). If
+/// Vento cannot serve it and a provider is configured in settings, that one
+/// is used instead.
+pub async fn run(app: &AppHandle, request: AssistRequest<'_>) -> Result<String, AssistError> {
+    let mut vento_failure: Option<AssistError> = None;
+
+    if let Some(account) = crate::commands::vento::account(app).filter(|a| a.is_ready()) {
+        let voice_request = match request {
+            AssistRequest::Edit {
+                selection: Some(selection),
+                instruction,
+            } if !selection.trim().is_empty() => VoiceRequest::Edit {
+                selection,
+                instruction,
+            },
+            AssistRequest::Edit { instruction, .. } => VoiceRequest::Write { instruction },
+            AssistRequest::Transform { kind, text, .. } => VoiceRequest::Transform {
+                transform: kind,
+                text,
+            },
+        };
+        match account.voice(voice_request).await {
+            Ok(response) if !response.truncated => return Ok(response.text),
+            Ok(_) => {
+                vento_failure = Some(AssistError::Failed("truncated".to_string()));
+            }
+            // Not an error of this request: the account simply cannot be
+            // used, so fall through to a local provider if there is one.
+            Err(VentoError::NotSignedIn) | Err(VentoError::FeatureOff) => {}
+            Err(e) => {
+                error!("Assist request through Vento failed: {:?}", e);
+                vento_failure = Some(AssistError::Failed(e.code().to_string()));
+            }
+        }
+    }
+
+    let (system_prompt, user_content) = match request {
+        AssistRequest::Edit {
+            selection,
+            instruction,
+        } => build_edit_request(selection, instruction),
+        AssistRequest::Transform {
+            system_prompt,
+            text,
+            ..
+        } => (system_prompt, text.to_string()),
+    };
+    match complete(app, system_prompt, user_content).await {
+        // No local provider either: report what went wrong with Vento, if
+        // it was tried.
+        Err(AssistError::NotConfigured) => Err(vento_failure.unwrap_or(AssistError::NotConfigured)),
+        other => other,
+    }
+}
+
+/// Sends one request to the provider configured in settings.
+async fn complete(
     app: &AppHandle,
     system_prompt: &str,
     user_content: String,
