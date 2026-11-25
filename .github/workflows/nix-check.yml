@@ -7,27 +7,10 @@
 # Setting up a Cachix binary cache would further reduce full-build times.
 
 name: "nix build check"
+# Vento Voice ships for Windows and macOS; the Nix package is not maintained
+# in this fork, so this check only runs when asked for.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "flake.nix"
-      - "flake.lock"
-      - ".nix/**"
-      - "bun.lock"
-      - "src-tauri/**"
-      - "src/**"
-      - ".github/workflows/**"
-  pull_request:
-    paths:
-      - "flake.nix"
-      - "flake.lock"
-      - ".nix/**"
-      - "bun.lock"
-      - "src-tauri/**"
-      - "src/**"
-      - ".github/workflows/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

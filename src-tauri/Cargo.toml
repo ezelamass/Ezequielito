@@ -1,7 +1,7 @@
 [package]
 name = "handy"
-version = "0.1.0"
-description = "Ezequielito - Personal dictation app (fork of Handy by cjpais)"
+version = "0.2.0"
+description = "Vento Voice - dictation app (built on Handy by cjpais, MIT)"
 authors = ["Ezequiel Lamas <ezequiellamasx@gmail.com>"]
 edition = "2021"
 license = "MIT"

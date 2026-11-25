@@ -709,17 +709,17 @@ fn default_post_process_prompts() -> Vec<LLMPrompt> {
         // (transcribe_casual / transcribe_formal / transcribe_code).
         LLMPrompt {
             id: "ez_casual".to_string(),
-            name: "Casual (Ezequielito)".to_string(),
+            name: "Casual".to_string(),
             prompt: "Limpia esta transcripción manteniendo un tono conversacional natural en español:\n1. Quita muletillas (eh, este, o sea, tipo, ¿viste?, you know)\n2. Arregla puntuación y mayúsculas\n3. Mantené las contracciones y modismos rioplatenses\n4. NO parafrasees — preservá el orden de las palabras y el significado exacto\n5. Devolvé solo el texto limpio, sin preámbulo\n\nTranscripción:\n${output}".to_string(),
         },
         LLMPrompt {
             id: "ez_formal".to_string(),
-            name: "Formal (Ezequielito)".to_string(),
+            name: "Formal".to_string(),
             prompt: "Reescribe esta transcripción en tono profesional formal para email a cliente:\n1. Sin muletillas, sin contracciones (no uses 'pa', 'pal', 'tipo')\n2. Tuteo respetuoso (no 'vos' / 'che', usar 'usted' si el contexto lo pide o tuteo formal)\n3. Puntuación correcta, mayúsculas correctas\n4. Mantené el significado pero podés mejorar la fluidez\n5. Devolvé solo el texto limpio, sin preámbulo ni explicaciones\n\nTranscripción:\n${output}".to_string(),
         },
         LLMPrompt {
             id: "ez_code".to_string(),
-            name: "Code (Ezequielito)".to_string(),
+            name: "Code".to_string(),
             prompt: "Esta transcripción es para pegar en un IDE o terminal de código:\n1. NO uses comillas tipográficas — solo comillas rectas \" '\n2. NO uses guiones largos — solo guion normal -\n3. Sin puntos finales si no son parte del código\n4. Mantené nombres de variables/funciones tal cual los dijo el speaker\n5. Para snake_case, kebab-case, camelCase: respetá la convención que mencione\n6. Devolvé solo el texto, listo para pegar\n\nTranscripción:\n${output}".to_string(),
         },
         // Phase 15 (Bundle 3): very casual prompt for Style → casual chats
@@ -727,7 +727,7 @@ fn default_post_process_prompts() -> Vec<LLMPrompt> {
         // a closer-to-spoken vibe.
         LLMPrompt {
             id: "ez_very_casual".to_string(),
-            name: "Very casual (Ezequielito)".to_string(),
+            name: "Very casual".to_string(),
             prompt: "Esta transcripción es para un chat re informal (WhatsApp, Discord):\n1. Quita muletillas\n2. Todo en minúscula, sin puntos finales\n3. Comas y signos de pregunta solo si son necesarios para entender\n4. Permitido el voseo, modismos y contracciones rioplatenses\n5. NO parafrasees — solo limpia\n6. Devolvé solo el texto limpio, sin preámbulo\n\nTranscripción:\n${output}".to_string(),
         },
     ]
