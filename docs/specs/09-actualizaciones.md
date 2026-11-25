@@ -10,6 +10,14 @@ La pantalla de actualizaciones usaba el actualizador de Tauri, que en este fork 
 - **Releases públicos.** El workflow `Release` publica un pre-release llamado "Vento Voice vX" con los instaladores de Windows (x64 y ARM), macOS y Linux. Antes creaba un borrador, que no tiene link público.
 - **Instalador con la marca.** Nombre "Vento Voice", ícono de Vento, ejecutable `vento-voice.exe`.
 
+## Completar un release al que le faltó una plataforma
+
+GitHub cancela los builds de macOS cuando se queda sin runners ("The job was not acquired by Runner"): el 2026-11-25 pasó cuatro veces seguidas y la v0.2.1 salió sin instalador de Mac. Relanzar el workflow no servía, porque fallaba al crear un release que ya existía.
+
+- El workflow `Release` **reusa el release si el tag ya existe** y le suma los instaladores.
+- Tiene una opción `platforms` (`all`, `macos`, `windows`, `linux`). Para completar el de Mac: Actions → Release → Run workflow → `macos`.
+- El build de Mac Intel corre en un runner Intel (`macos-26-intel`), que es otra cola que la de Apple Silicon, la que se agota. Antes los dos builds de Mac esperaban en la misma.
+
 ## Lo que NO es (todavía)
 
 **No se instala sola.** Para que una app se reemplace a sí misma sin que nadie mire, cada actualización tiene que ir firmada con una clave propia, y el instalador de Windows tiene que estar firmado con un certificado para que el sistema no lo frene. Ninguna de las dos cosas existe hoy. Por eso es un aviso con link y no una auto-actualización.
