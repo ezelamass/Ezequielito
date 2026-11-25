@@ -92,7 +92,13 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        # Pinned. Newer Cargo moved build-script output one directory deeper
+        # (target/<profile>/build/<pkg>/<hash>/out), and ort-sys 2.0.0-rc.12
+        # locates the folder for its DLLs by walking up from there: on
+        # Windows it then fails with "The system cannot find the path
+        # specified". 1.97.0 still has the layout it expects. Unpin once
+        # ort-sys is upgraded.
+        uses: dtolnay/rust-toolchain@1.97.0
         with:
           # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
           targets: ${{ contains(inputs.platform, 'macos') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
@@ -352,6 +358,7 @@ jobs:
             src-tauri/tauri.conf.json > tmp.json && mv tmp.json src-tauri/tauri.conf.json
 
       - name: Build with Tauri
+        if: ${{ !(contains(inputs.platform, 'macos') && steps.signing.outputs.apple != 'true') }}
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -365,6 +372,34 @@ jobs:
           AZURE_CLIENT_ID: ${{ inputs.sign-binaries && secrets.AZURE_CLIENT_ID || '' }}
           AZURE_CLIENT_SECRET: ${{ inputs.sign-binaries && secrets.AZURE_CLIENT_SECRET || '' }}
           AZURE_TENANT_ID: ${{ inputs.sign-binaries && secrets.AZURE_TENANT_ID || '' }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ inputs.sign-binaries && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ inputs.sign-binaries && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
+          # Disable -march=native and all SIMD instruction sets above SSE4.2 for
+          # x86_64 builds. Without this, CPUs lacking AVX/FMA (e.g. Celeron N2920,
+          # FX-8350) crash with SIGILL. The Vulkan backend handles heavy compute
+          # so disabling these has negligible performance impact.
+          GGML_NATIVE: ${{ !contains(inputs.platform, 'macos') && !contains(inputs.platform, 'arm') && !contains(inputs.target, 'aarch64') && 'OFF' || '' }}
+          GGML_AVX: ${{ !contains(inputs.platform, 'macos') && !contains(inputs.platform, 'arm') && !contains(inputs.target, 'aarch64') && 'OFF' || '' }}
+          GGML_AVX2: ${{ !contains(inputs.platform, 'macos') && !contains(inputs.platform, 'arm') && !contains(inputs.target, 'aarch64') && 'OFF' || '' }}
+          GGML_FMA: ${{ !contains(inputs.platform, 'macos') && !contains(inputs.platform, 'arm') && !contains(inputs.target, 'aarch64') && 'OFF' || '' }}
+          GGML_F16C: ${{ !contains(inputs.platform, 'macos') && !contains(inputs.platform, 'arm') && !contains(inputs.target, 'aarch64') && 'OFF' || '' }}
+        with:
+          tagName: ${{ inputs.release-id && format('v{0}', steps.get-version.outputs.version) || '' }}
+          releaseName: ${{ inputs.release-id && format('v{0}', steps.get-version.outputs.version) || '' }}
+          releaseId: ${{ inputs.release-id }}
+          assetNamePattern: ${{ steps.patch-release-name.outputs.platform }}
+          args: ${{ inputs.build-args }}
+
+      # Same build without the APPLE_* variables. Tauri tries to import a
+      # certificate whenever APPLE_CERTIFICATE is defined, even empty, and
+      # fails the bundle; a step-level `env` cannot leave a key out
+      # conditionally, hence the second step. The app gets the ad-hoc
+      # signature from `signingIdentity: "-"` in tauri.conf.json.
+      - name: Build with Tauri (macOS, no certificate)
+        if: ${{ contains(inputs.platform, 'macos') && steps.signing.outputs.apple != 'true' }}
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ inputs.sign-binaries && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ inputs.sign-binaries && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
           # Disable -march=native and all SIMD instruction sets above SSE4.2 for
