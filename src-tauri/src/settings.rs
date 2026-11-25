@@ -1245,16 +1245,56 @@ pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
     settings
 }
 
+/// Where the stored settings are copied when they cannot be read as a whole.
+const UNREADABLE_SETTINGS_BACKUP_KEY: &str = "settings_unreadable_backup";
+
+/// Rebuilds settings from a stored value that no longer deserialises as a
+/// whole (a hand edit, a value whose shape changed between versions).
+///
+/// Starts from `defaults` and takes each stored top-level key that still
+/// fits; a key that does not is left at its default. Everything else the
+/// person had configured survives.
+fn salvage_settings(stored: &serde_json::Value, defaults: AppSettings) -> AppSettings {
+    let (Ok(serde_json::Value::Object(mut merged)), Some(stored)) =
+        (serde_json::to_value(&defaults), stored.as_object())
+    else {
+        return defaults;
+    };
+
+    for (key, value) in stored {
+        let previous = merged.insert(key.clone(), value.clone());
+        let still_valid =
+            serde_json::from_value::<AppSettings>(serde_json::Value::Object(merged.clone()))
+                .is_ok();
+        if !still_valid {
+            match previous {
+                Some(default_value) => merged.insert(key.clone(), default_value),
+                None => merged.remove(key),
+            };
+        }
+    }
+
+    serde_json::from_value(serde_json::Value::Object(merged)).unwrap_or(defaults)
+}
+
 pub fn get_settings(app: &AppHandle) -> AppSettings {
     let store = app
         .store(crate::portable::store_path(SETTINGS_STORE_PATH))
         .expect("Failed to initialize store");
 
     let mut settings = if let Some(settings_value) = store.get("settings") {
-        serde_json::from_value::<AppSettings>(settings_value).unwrap_or_else(|_| {
-            let default_settings = get_default_settings();
-            store.set("settings", serde_json::to_value(&default_settings).unwrap());
-            default_settings
+        serde_json::from_value::<AppSettings>(settings_value.clone()).unwrap_or_else(|e| {
+            // One unreadable value must not cost the person their
+            // dictionary, snippets and shortcuts: keep everything that still
+            // reads, and set what was there aside in case it is needed.
+            warn!(
+                "Settings could not be read ({}); salvaging what is valid",
+                e
+            );
+            store.set(UNREADABLE_SETTINGS_BACKUP_KEY, settings_value.clone());
+            let salvaged = salvage_settings(&settings_value, get_default_settings());
+            store.set("settings", serde_json::to_value(&salvaged).unwrap());
+            salvaged
         })
     } else {
         let default_settings = get_default_settings();
@@ -1303,6 +1343,44 @@ pub fn get_recording_retention_period(app: &AppHandle) -> RecordingRetentionPeri
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn one_unreadable_value_does_not_cost_the_rest_of_the_settings() {
+        let mut stored = serde_json::to_value(get_default_settings()).unwrap();
+        let object = stored.as_object_mut().unwrap();
+        object.insert(
+            "custom_words".to_string(),
+            serde_json::json!(["Vento", "Enroque"]),
+        );
+        object.insert("hands_free_enabled".to_string(), serde_json::json!(true));
+        // A value of the wrong shape, as a hand edit or an old version could leave.
+        object.insert("history_limit".to_string(), serde_json::json!("many"));
+        assert!(serde_json::from_value::<AppSettings>(stored.clone()).is_err());
+
+        let salvaged = salvage_settings(&stored, get_default_settings());
+
+        assert_eq!(salvaged.custom_words, vec!["Vento", "Enroque"]);
+        assert!(salvaged.hands_free_enabled);
+        assert_eq!(salvaged.history_limit, get_default_settings().history_limit);
+    }
+
+    #[test]
+    fn unknown_keys_and_non_objects_fall_back_safely() {
+        let mut stored = serde_json::to_value(get_default_settings()).unwrap();
+        stored.as_object_mut().unwrap().insert(
+            "removed_in_a_later_version".to_string(),
+            serde_json::json!(42),
+        );
+        let salvaged = salvage_settings(&stored, get_default_settings());
+        assert_eq!(salvaged.push_to_talk, get_default_settings().push_to_talk);
+
+        let from_garbage =
+            salvage_settings(&serde_json::json!("not an object"), get_default_settings());
+        assert_eq!(
+            from_garbage.push_to_talk,
+            get_default_settings().push_to_talk
+        );
+    }
+
     use super::*;
 
     #[test]
