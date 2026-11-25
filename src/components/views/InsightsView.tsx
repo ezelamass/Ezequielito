@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { commands } from "@/bindings";
 
 /**
@@ -22,6 +23,7 @@ interface Entry {
 }
 
 export const InsightsView: React.FC = () => {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("usage");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,20 +48,24 @@ export const InsightsView: React.FC = () => {
   return (
     <div className="w-full max-w-5xl mx-auto py-4 space-y-6">
       <header>
-        <h1 className="font-serif italic text-4xl text-ez-text">Insights</h1>
+        <h1 className="font-serif italic text-4xl text-ez-text">
+          {t("sidebar.insights")}
+        </h1>
       </header>
 
       <nav className="flex gap-6 border-b border-mid-gray/20">
         <TabButton active={tab === "usage"} onClick={() => setTab("usage")}>
-          Tu uso
+          {t("views.insights.tabs.usage")}
         </TabButton>
         <TabButton active={tab === "voice"} onClick={() => setTab("voice")}>
-          Tu voz
+          {t("views.insights.tabs.voice")}
         </TabButton>
       </nav>
 
       {loading ? (
-        <div className="text-mid-gray text-sm">Cargando stats...</div>
+        <div className="text-mid-gray text-sm">
+          {t("views.insights.loading")}
+        </div>
       ) : tab === "usage" ? (
         <UsageTab stats={stats} entries={entries} />
       ) : (
@@ -70,41 +76,52 @@ export const InsightsView: React.FC = () => {
 };
 
 function UsageTab({ stats, entries }: { stats: Stats; entries: Entry[] }) {
+  const { t } = useTranslation();
   return (
     <>
       {/* Top stat cards */}
       <section className="grid grid-cols-3 gap-4">
         <BigStatCard
-          label="Palabras dictadas"
+          label={t("views.insights.stats.wordsDictated")}
           value={stats.totalWords.toLocaleString()}
           sublabel={
             stats.wordsChangePct !== null
-              ? `${stats.wordsChangePct > 0 ? "+" : ""}${stats.wordsChangePct.toFixed(1)}% este mes`
+              ? t("views.insights.stats.wordsChange", {
+                  change: `${stats.wordsChangePct > 0 ? "+" : ""}${stats.wordsChangePct.toFixed(1)}`,
+                })
               : undefined
           }
           subAccent={stats.wordsChangePct !== null && stats.wordsChangePct >= 0}
         />
         <BigStatCard
-          label="Dictados totales"
+          label={t("views.insights.stats.totalDictations")}
           value={stats.totalDictations.toLocaleString()}
-          sublabel={`${stats.thisWeekDictations} esta semana`}
+          sublabel={t("views.insights.stats.thisWeek", {
+            count: stats.thisWeekDictations,
+          })}
         />
         <BigStatCard
-          label={`Racha ${stats.streak === 1 ? "" : "actual"}`}
-          value={`${stats.streak} ${stats.streak === 1 ? "día" : "días"}`}
-          sublabel={`Más larga: ${stats.longestStreak} días`}
+          label={
+            stats.streak === 1
+              ? t("views.insights.stats.streak")
+              : t("views.insights.stats.currentStreak")
+          }
+          value={t("views.insights.stats.streakDays", { count: stats.streak })}
+          sublabel={t("views.insights.stats.longestStreak", {
+            count: stats.longestStreak,
+          })}
         />
       </section>
 
       {/* WPM & Fixes — instrumentation pending */}
       <section className="grid grid-cols-2 gap-4">
         <PendingCard
-          title="Words per minute"
-          description="Requiere capturar la duración de cada recording. Próximo bundle."
+          title={t("views.insights.pending.wpm.title")}
+          description={t("views.insights.pending.wpm.description")}
         />
         <PendingCard
-          title="Fixes aplicados"
-          description="Requiere contador de custom_words + snippets substituciones por dictado. Próximo bundle."
+          title={t("views.insights.pending.fixes.title")}
+          description={t("views.insights.pending.fixes.description")}
         />
       </section>
 
@@ -112,15 +129,21 @@ function UsageTab({ stats, entries }: { stats: Stats; entries: Entry[] }) {
       <section className="border border-mid-gray/20 rounded-xl p-5 space-y-3">
         <div className="flex items-baseline justify-between">
           <h2 className="font-serif italic text-2xl">
-            {stats.streak === 0 ? "Sin racha activa" : `${stats.streak} día${stats.streak === 1 ? "" : "s"} de racha`}
+            {stats.streak === 0
+              ? t("views.insights.calendar.noStreak")
+              : t("views.insights.calendar.streakTitle", {
+                  count: stats.streak,
+                })}
           </h2>
           <span className="text-xs uppercase tracking-wider text-mid-gray font-mono">
-            Mejor racha · {stats.longestStreak} días
+            {t("views.insights.calendar.bestStreak", {
+              count: stats.longestStreak,
+            })}
           </span>
         </div>
         <StreakCalendar entries={entries} />
         <div className="flex items-center gap-2 text-xs text-mid-gray">
-          <span>Menos</span>
+          <span>{t("views.insights.calendar.less")}</span>
           <div className="flex gap-1">
             {[0, 1, 2, 3, 4].map((lvl) => (
               <span
@@ -130,7 +153,7 @@ function UsageTab({ stats, entries }: { stats: Stats; entries: Entry[] }) {
               />
             ))}
           </div>
-          <span>Más</span>
+          <span>{t("views.insights.calendar.more")}</span>
         </div>
       </section>
     </>
@@ -138,15 +161,17 @@ function UsageTab({ stats, entries }: { stats: Stats; entries: Entry[] }) {
 }
 
 function VoiceTab() {
+  const { t } = useTranslation();
   return (
     <div className="border border-dashed border-mid-gray/40 rounded-xl p-8 text-center space-y-3">
-      <div className="font-serif italic text-2xl text-accent">Voice analytics</div>
+      <div className="font-serif italic text-2xl text-accent">
+        {t("views.insights.voice.title")}
+      </div>
       <p className="text-mid-gray text-sm max-w-xl mx-auto">
-        Acento detectado, velocidad de habla, idiomas más usados.
-        Requiere instrumentación adicional del recorder. Próximo bundle.
+        {t("views.insights.voice.description")}
       </p>
       <div className="inline-block text-xs uppercase tracking-wider font-mono text-mid-gray border border-mid-gray/30 rounded px-2 py-1">
-        Próximamente
+        {t("views.insights.comingSoon")}
       </div>
     </div>
   );
@@ -228,6 +253,7 @@ function PendingCard({
 
 // Streak calendar — last 16 weeks × 7 days
 function StreakCalendar({ entries }: { entries: Entry[] }) {
+  const { t } = useTranslation();
   const dayCounts = useMemo(() => {
     const map = new Map<string, number>();
     for (const e of entries) {
@@ -258,13 +284,13 @@ function StreakCalendar({ entries }: { entries: Entry[] }) {
   return (
     <div className="flex gap-1 overflow-x-auto pb-1">
       <div className="flex flex-col gap-1 mr-2 justify-around text-xs text-mid-gray">
-        <span>L</span>
-        <span>M</span>
-        <span>M</span>
-        <span>J</span>
-        <span>V</span>
-        <span>S</span>
-        <span>D</span>
+        <span>{t("views.insights.calendar.weekdays.monday")}</span>
+        <span>{t("views.insights.calendar.weekdays.tuesday")}</span>
+        <span>{t("views.insights.calendar.weekdays.wednesday")}</span>
+        <span>{t("views.insights.calendar.weekdays.thursday")}</span>
+        <span>{t("views.insights.calendar.weekdays.friday")}</span>
+        <span>{t("views.insights.calendar.weekdays.saturday")}</span>
+        <span>{t("views.insights.calendar.weekdays.sunday")}</span>
       </div>
       {columns.map((col, ci) => (
         <div key={ci} className="flex flex-col gap-1">
@@ -272,8 +298,13 @@ function StreakCalendar({ entries }: { entries: Entry[] }) {
             <div
               key={ri}
               className="w-3 h-3 rounded-sm"
-              style={{ backgroundColor: intensityColor(intensityFor(cell.count)) }}
-              title={`${cell.date.toLocaleDateString()} · ${cell.count} dictado${cell.count === 1 ? "" : "s"}`}
+              style={{
+                backgroundColor: intensityColor(intensityFor(cell.count)),
+              }}
+              title={t("views.insights.calendar.dayTooltip", {
+                date: cell.date.toLocaleDateString(),
+                count: cell.count,
+              })}
             />
           ))}
         </div>
@@ -308,7 +339,9 @@ function computeStats(entries: Entry[]): Stats {
 
   const now = Date.now() / 1000;
   const weekAgo = now - 7 * 24 * 60 * 60;
-  const thisWeekDictations = entries.filter((e) => e.timestamp >= weekAgo).length;
+  const thisWeekDictations = entries.filter(
+    (e) => e.timestamp >= weekAgo,
+  ).length;
 
   // % change in word count: this 30 days vs prev 30 days
   const day30 = now - 30 * 24 * 60 * 60;
@@ -323,7 +356,9 @@ function computeStats(entries: Entry[]): Stats {
     wordsPrev30 > 0 ? ((wordsLast30 - wordsPrev30) / wordsPrev30) * 100 : null;
 
   // streak — consecutive days back from today w/ at least one entry
-  const days = new Set(entries.map((e) => dayKey(new Date(e.timestamp * 1000))));
+  const days = new Set(
+    entries.map((e) => dayKey(new Date(e.timestamp * 1000))),
+  );
   let streak = 0;
   let longestStreak = 0;
   // current streak
@@ -402,12 +437,13 @@ export function ComingSoonCard({
   title: string;
   description: string;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="border border-dashed border-mid-gray/40 rounded-xl p-8 text-center space-y-3">
       <div className="font-serif italic text-2xl text-accent">{title}</div>
       <p className="text-mid-gray text-sm max-w-xl mx-auto">{description}</p>
       <div className="inline-block text-xs uppercase tracking-wider font-mono text-mid-gray border border-mid-gray/30 rounded px-2 py-1">
-        Próximamente
+        {t("views.insights.comingSoon")}
       </div>
     </div>
   );

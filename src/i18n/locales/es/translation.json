@@ -147,39 +147,21 @@
     "noModelDownloadRequired": "Sin Modelo - Descarga Requerida",
     "deleteModel": "Eliminar {{modelName}}",
     "downloadSpeed": "{{speed}} MB/s",
+    "cancel": "Cancelar",
+    "cancelDownload": "Cancelar descarga",
     "capabilities": {
       "languageSelection": "Soporta múltiples idiomas de entrada",
-      "multiLanguage": "Multiidioma",
-      "translation": "Puede traducir al inglés",
-      "translate": "Traducir al inglés",
       "singleLanguage": "Solo admite este idioma",
-      "languageOnly": "Solo {{language}}"
-    },
-    "cancel": "Cancelar",
-    "cancelDownload": "Cancelar descarga"
+      "multiLanguage": "Multiidioma",
+      "languageOnly": "Solo {{language}}",
+      "translation": "Puede traducir al inglés",
+      "translate": "Traducir al inglés"
+    }
   },
   "settings": {
     "modelSettings": {
       "title": "Configuración de {{model}}",
       "noSettingsNeeded": "Este modelo funciona automáticamente sin necesidad de configuración."
-    },
-    "models": {
-      "title": "Modelos de Transcripción",
-      "description": "Selecciona un modelo de transcripción o descarga modelos adicionales. Diferentes modelos ofrecen distintos niveles de precisión y velocidad.",
-      "downloaded": "Descargados",
-      "available": "Disponibles para Descargar",
-      "deleteConfirm": "¿Estás seguro de que deseas eliminar {{modelName}}? Necesitarás descargarlo de nuevo para usarlo.",
-      "deleteActiveConfirm": "{{modelName}} es tu modelo activo. Eliminarlo detendrá las transcripciones hasta que selecciones un nuevo modelo. ¿Estás seguro?",
-      "deleteTitle": "Eliminar modelo",
-      "filters": {
-        "all": "Todos",
-        "multiLanguage": "Multiidioma",
-        "translation": "Traducción",
-        "allLanguages": "Todos los idiomas"
-      },
-      "noModelsMatch": "Ningún modelo coincide con este filtro.",
-      "yourModels": "Modelos descargados",
-      "availableModels": "Disponibles para descargar"
     },
     "general": {
       "title": "General",
@@ -222,6 +204,24 @@
         "label": "Presionar para Hablar",
         "description": "Mantén presionado para grabar, suelta para detener"
       }
+    },
+    "models": {
+      "title": "Modelos de Transcripción",
+      "description": "Selecciona un modelo de transcripción o descarga modelos adicionales. Diferentes modelos ofrecen distintos niveles de precisión y velocidad.",
+      "yourModels": "Modelos descargados",
+      "availableModels": "Disponibles para descargar",
+      "downloaded": "Descargados",
+      "available": "Disponibles para Descargar",
+      "deleteConfirm": "¿Estás seguro de que deseas eliminar {{modelName}}? Necesitarás descargarlo de nuevo para usarlo.",
+      "deleteActiveConfirm": "{{modelName}} es tu modelo activo. Eliminarlo detendrá las transcripciones hasta que selecciones un nuevo modelo. ¿Estás seguro?",
+      "deleteTitle": "Eliminar modelo",
+      "filters": {
+        "all": "Todos",
+        "multiLanguage": "Multiidioma",
+        "translation": "Traducción",
+        "allLanguages": "Todos los idiomas"
+      },
+      "noModelsMatch": "Ningún modelo coincide con este filtro."
     },
     "sound": {
       "title": "Sonido",
@@ -364,6 +364,14 @@
         "add": "Agregar",
         "remove": "Eliminar {{word}}",
         "duplicate": "\"{{word}}\" ya existe"
+      },
+      "overlayIdlePill": {
+        "title": "Píldora siempre visible",
+        "description": "Deja una píldora chica en pantalla cuando no estás dictando. Pasá el mouse para ver tu tecla y hacé clic para empezar a dictar."
+      },
+      "handsFree": {
+        "title": "Manos libres (tocá Espacio mientras grabás)",
+        "description": "Mientras mantenés tu tecla de dictado, tocá Espacio para bloquear la grabación: podés soltar y seguir hablando. Tocá Espacio de nuevo, o el ✓ de la píldora, para terminar. Si tu tecla ya usa Espacio (Ctrl+Espacio), esto se saltea solo; elegí otra tecla para usarlo."
       }
     },
     "postProcessing": {
@@ -545,6 +553,55 @@
           "details": "Ezequielito usa Whisper.cpp para procesamiento de voz a texto rápido y local. Gracias al increíble trabajo de Georgi Gerganov y colaboradores."
         }
       }
+    },
+    "ezequielito": {
+      "appPromptMapping": {
+        "title": "Mapeo App → Prompt (modo Auto)",
+        "description": "Cuando usás el hotkey 'Transcribe (Auto)', el sistema detecta la app en foreground y rutea al prompt mapeado acá. Apps no listadas usan Casual por default.",
+        "appPlaceholder": "exe name (ej: 'cursor', 'outlook')",
+        "prompts": {
+          "casual": "Casual",
+          "formal": "Formal",
+          "code": "Code"
+        },
+        "duplicate": "Mapping para \"{{app}}\" ya existe",
+        "remove": "Eliminar mapping {{app}}"
+      },
+      "dictionarySync": {
+        "title": "Sync del diccionario",
+        "description": "Sincronizá tu custom_words con un archivo JSON en OneDrive / Dropbox / Google Drive. El servicio de cloud se encarga de propagar entre dispositivos.",
+        "pathPlaceholder": "C:\\Users\\…\\OneDrive\\ezequielito-dictionary.json",
+        "browse": "Examinar",
+        "syncing": "Sincronizando...",
+        "syncNow": "Sincronizar ahora",
+        "disable": "Desactivar",
+        "active": "Sync activo: {{path}}",
+        "pathSaved": "Ruta de sync del diccionario guardada",
+        "disabled": "Sync del diccionario desactivado",
+        "error": "Error: {{error}}",
+        "noPath": "Configurá una ruta de sync primero",
+        "syncOk": "Sync OK — {{count}} palabras",
+        "syncOk_one": "Sync OK — {{count}} palabra",
+        "syncFailed": "Sync falló: {{error}}",
+        "syncError": "Error de sync: {{error}}"
+      },
+      "snippets": {
+        "title": "Snippets",
+        "description": "Voice triggers que se expanden a texto. Ej: decí 'mi email' y se pega tu dirección completa. Match case-insensitive de palabra completa.",
+        "triggerPlaceholder": "trigger (ej: 'mi email')",
+        "expansionPlaceholder": "expansion (texto a pegar)",
+        "duplicate": "Snippet \"{{trigger}}\" ya existe",
+        "tooLong": "Trigger ≤ 80 chars, expansión ≤ 2000 chars",
+        "remove": "Eliminar snippet {{trigger}}"
+      },
+      "voiceCommands": {
+        "title": "Comandos de voz",
+        "description": "Comandos de voz para lanzar apps. Mantené el hotkey de voice command + decí la frase. Targets: URIs (claude://, whatsapp://, notion://) o exe directos (chrome.exe, calc.exe).",
+        "phrasePlaceholder": "frase (ej: 'claude code')",
+        "targetPlaceholder": "target (ej: 'claude://')",
+        "duplicate": "Comando \"{{phrase}}\" ya existe",
+        "remove": "Eliminar voice command {{phrase}}"
+      }
     }
   },
   "footer": {
@@ -615,6 +672,209 @@
   },
   "overlay": {
     "transcribing": "Transcribiendo...",
-    "processing": "Procesando..."
+    "processing": "Procesando...",
+    "cancel": "Cancelar",
+    "confirm": "Terminar y pegar",
+    "handsFree": "MANOS LIBRES",
+    "idle": {
+      "start": "Empezar a dictar"
+    },
+    "errors": {
+      "micDenied": "El micrófono está bloqueado",
+      "noMic": "No hay micrófono",
+      "noSpeech": "No se escuchó nada",
+      "transcriptionFailed": "No se pudo transcribir",
+      "pasteFailed": "No se pudo pegar el texto",
+      "commandNotFound": "Ningún comando coincide",
+      "generic": "Algo salió mal",
+      "noSelection": "No hay texto seleccionado",
+      "aiNotConfigured": "Falta configurar la IA",
+      "aiFailed": "La IA no respondió"
+    }
+  },
+  "app": {
+    "name": "Ezequielito"
+  },
+  "views": {
+    "home": {
+      "tagline": "Tu dictado, tu marca, tu workflow.",
+      "stats": {
+        "wordsDictated": "Palabras dictadas",
+        "recentDictations": "Dictados recientes",
+        "streak": "Racha",
+        "streakDays": "{{count}} días",
+        "streakDays_one": "{{count}} día"
+      },
+      "hotkeys": {
+        "title": "Tus hotkeys",
+        "empty": "No tenés hotkeys asignados todavía. Andá a <path>Settings → General</path> para configurar tu primer transcribe shortcut."
+      },
+      "quickStart": {
+        "title": "Para empezar a dictar",
+        "description": "Mantené apretado tu hotkey de transcribe y hablá. Soltá para que transcriba y pegue."
+      }
+    },
+    "insights": {
+      "tabs": {
+        "usage": "Tu uso",
+        "voice": "Tu voz"
+      },
+      "loading": "Cargando stats...",
+      "stats": {
+        "wordsDictated": "Palabras dictadas",
+        "wordsChange": "{{change}}% este mes",
+        "totalDictations": "Dictados totales",
+        "thisWeek": "{{count}} esta semana",
+        "streak": "Racha",
+        "currentStreak": "Racha actual",
+        "streakDays": "{{count}} días",
+        "streakDays_one": "{{count}} día",
+        "longestStreak": "Más larga: {{count}} días",
+        "longestStreak_one": "Más larga: {{count}} día"
+      },
+      "pending": {
+        "wpm": {
+          "title": "Palabras por minuto",
+          "description": "Requiere capturar la duración de cada recording. Próximo bundle."
+        },
+        "fixes": {
+          "title": "Fixes aplicados",
+          "description": "Requiere contador de custom_words + snippets substituciones por dictado. Próximo bundle."
+        }
+      },
+      "calendar": {
+        "noStreak": "Sin racha activa",
+        "streakTitle": "{{count}} días de racha",
+        "streakTitle_one": "{{count}} día de racha",
+        "bestStreak": "Mejor racha · {{count}} días",
+        "bestStreak_one": "Mejor racha · {{count}} día",
+        "less": "Menos",
+        "more": "Más",
+        "weekdays": {
+          "monday": "L",
+          "tuesday": "M",
+          "wednesday": "M",
+          "thursday": "J",
+          "friday": "V",
+          "saturday": "S",
+          "sunday": "D"
+        },
+        "dayTooltip": "{{date}} · {{count}} dictados",
+        "dayTooltip_one": "{{date}} · {{count}} dictado"
+      },
+      "voice": {
+        "title": "Analítica de voz",
+        "description": "Acento detectado, velocidad de habla, idiomas más usados. Requiere instrumentación adicional del recorder. Próximo bundle."
+      },
+      "comingSoon": "Próximamente"
+    },
+    "dictionary": {
+      "tabs": {
+        "all": "Todos",
+        "personal": "Personal",
+        "shared": "Compartido con el equipo"
+      },
+      "promo": {
+        "title": "Ezequielito escribe como <emphasis>vos</emphasis>.",
+        "description": "Agregá los nombres propios, jerga de tu industria, marcas de clientes. Cada dictado los respeta y los corrige automáticamente aunque el modelo los haya escuchado mal."
+      },
+      "sharedUnavailable": "Compartir con equipo todavía no está disponible. Sumalo en <path>Settings → Advanced</path> manualmente por ahora."
+    },
+    "snippets": {
+      "tabs": {
+        "all": "Todos",
+        "personal": "Personal",
+        "shared": "Compartido con el equipo"
+      },
+      "promo": {
+        "title": "Lo que <emphasis>vos</emphasis> no tenés que re-escribir.",
+        "description": "Guardá cualquier cosa que tipeás seguido — tu email, un intro, un prompt — y decí una palabra o frase para reemplazarlo en el lugar."
+      },
+      "sharedUnavailable": "Compartir con equipo todavía no está disponible."
+    },
+    "style": {
+      "categories": {
+        "personal": {
+          "label": "Mensajes personales",
+          "description": "Aplica en mensajeros personales."
+        },
+        "work": {
+          "label": "Mensajes de trabajo",
+          "description": "Aplica en mensajeros de trabajo."
+        },
+        "email": {
+          "label": "Email",
+          "description": "Aplica en clientes de mail."
+        },
+        "other": {
+          "label": "Otros",
+          "description": "Apps de productividad / browsers / IDEs. Si querés todo en code, asignalo manualmente en App Prompt Map en Advanced."
+        },
+        "autoCleanup": {
+          "label": "Auto Cleanup",
+          "description": "Limpieza automática sin LLM — próximo bundle."
+        }
+      },
+      "beta": "Beta",
+      "apps": "Apps: {{apps}}",
+      "autoCleanupPending": "Auto Cleanup todavía no está implementado. Por ahora todos los dictados pasan por el LLM si tenés post-processing activo.",
+      "styles": {
+        "formal": {
+          "title": "Formal",
+          "subtitle": "Caps + Puntuación",
+          "example": "Hola, ¿estás libre para almorzar mañana? Avisame si las 12 te funciona."
+        },
+        "casual": {
+          "title": "Casual",
+          "subtitle": "Caps + Poca puntuación",
+          "example": "Hola estás libre para almorzar mañana? las 12 si te funciona"
+        },
+        "veryCasual": {
+          "title": "very casual",
+          "subtitle": "Sin caps + poca puntuación",
+          "example": "hola estás libre para almorzar mañana? las 12 si te funciona"
+        }
+      },
+      "mixed": "Style mixto en este contexto. Hacé click en una card para uniformar."
+    },
+    "transforms": {
+      "beta": "Beta",
+      "intro": {
+        "title": "Transform funciona en cualquier app",
+        "description": "Seleccioná texto en cualquier ventana y apretá la tecla del transform: al soltarla, el texto se reescribe ahí mismo."
+      },
+      "builtin": {
+        "polish": {
+          "name": "Polish",
+          "description": "Mejora claridad y concisión sin cambiar el significado."
+        },
+        "promptEngineer": {
+          "name": "Prompt Engineer",
+          "description": "Reescribe el texto como un prompt LLM estructurado."
+        },
+        "summarize": {
+          "name": "Summarize",
+          "description": "Resumen en 3-5 oraciones, mismo idioma."
+        }
+      },
+      "unassigned": "Sin asignar",
+      "assignHint": "Para asignar hotkeys: Settings → General → grupo “Ezequielito shortcuts”."
+    },
+    "scratchpad": {
+      "description": "Editor libre. Asigná un hotkey a <binding>Transcribe to Scratchpad</binding> en Settings → General para dictar directo acá.",
+      "noHotkey": "Sin hotkey asignado",
+      "placeholder": "Empezá a escribir o dictá acá usando el hotkey de Transcribe to Scratchpad...",
+      "wordCount": "{{count}} palabras",
+      "wordCount_one": "{{count}} palabra",
+      "charCount": "{{count}} caracteres",
+      "charCount_one": "{{count}} carácter",
+      "copyAll": "Copiar todo",
+      "clear": "Borrar",
+      "hint": "El contenido persiste localmente entre sesiones. Las dictadas se agregan al final separadas por un salto de línea. Para enviar texto a otra app, usá Copiar todo y pegá afuera.",
+      "appended": "Texto agregado al Scratchpad",
+      "copied": "Copiado al portapapeles",
+      "copyFailed": "No se pudo copiar",
+      "confirmClear": "¿Borrar todo el contenido del Scratchpad? Esta acción no se puede deshacer."
+    }
   }
 }

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import { CustomWords } from "../settings/CustomWords";
 
 /**
@@ -12,45 +13,53 @@ import { CustomWords } from "../settings/CustomWords";
 type DictTab = "all" | "personal" | "shared";
 
 export const DictionaryView: React.FC = () => {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<DictTab>("all");
 
   return (
     <div className="w-full max-w-4xl mx-auto py-4 space-y-6">
       <header className="flex items-center justify-between">
-        <h1 className="font-serif italic text-4xl text-ez-text">Dictionary</h1>
+        <h1 className="font-serif italic text-4xl text-ez-text">
+          {t("sidebar.dictionary")}
+        </h1>
       </header>
 
       {/* Tabs */}
       <nav className="flex gap-6 border-b border-mid-gray/20">
         <TabButton active={tab === "all"} onClick={() => setTab("all")}>
-          All
+          {t("views.dictionary.tabs.all")}
         </TabButton>
-        <TabButton active={tab === "personal"} onClick={() => setTab("personal")}>
-          Personal
+        <TabButton
+          active={tab === "personal"}
+          onClick={() => setTab("personal")}
+        >
+          {t("views.dictionary.tabs.personal")}
         </TabButton>
         <TabButton active={tab === "shared"} onClick={() => setTab("shared")}>
-          Shared with team
+          {t("views.dictionary.tabs.shared")}
         </TabButton>
       </nav>
 
       {/* Promo card */}
       <div className="border border-mid-gray/20 rounded-xl p-6 bg-mid-gray/5">
         <h2 className="font-serif italic text-2xl mb-2">
-          Ezequielito escribe como <span className="not-italic">vos</span>.
+          <Trans
+            i18nKey="views.dictionary.promo.title"
+            components={{ emphasis: <span className="not-italic" /> }}
+          />
         </h2>
         <p className="text-sm text-mid-gray max-w-2xl">
-          Agregá los nombres propios, jerga de tu industria, marcas de
-          clientes. Cada dictado los respeta y los corrige automáticamente
-          aunque el modelo los haya escuchado mal.
+          {t("views.dictionary.promo.description")}
         </p>
       </div>
 
       {/* Content */}
       {tab === "shared" ? (
         <div className="text-mid-gray text-sm border border-mid-gray/20 rounded-lg p-6 text-center">
-          Compartir con equipo todavía no está disponible. Sumalo en{" "}
-          <span className="font-medium">Settings → Advanced</span> manualmente
-          por ahora.
+          <Trans
+            i18nKey="views.dictionary.sharedUnavailable"
+            components={{ path: <span className="font-medium" /> }}
+          />
         </div>
       ) : (
         <CustomWords descriptionMode="inline" grouped={false} />

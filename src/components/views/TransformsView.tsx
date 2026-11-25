@@ -1,5 +1,6 @@
 import React from "react";
 import { Wand2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useSettings } from "../../hooks/useSettings";
 
 /**
@@ -17,31 +18,34 @@ import { useSettings } from "../../hooks/useSettings";
 const BUILTIN_TRANSFORMS = [
   {
     id: "transform_polish",
-    name: "Polish",
-    description: "Mejora claridad y concisión sin cambiar el significado.",
+    nameKey: "views.transforms.builtin.polish.name",
+    descriptionKey: "views.transforms.builtin.polish.description",
   },
   {
     id: "transform_prompt_engineer",
-    name: "Prompt Engineer",
-    description: "Reescribe el texto como un prompt LLM estructurado.",
+    nameKey: "views.transforms.builtin.promptEngineer.name",
+    descriptionKey: "views.transforms.builtin.promptEngineer.description",
   },
   {
     id: "transform_summarize",
-    name: "Summarize",
-    description: "Resumen en 3-5 oraciones, mismo idioma.",
+    nameKey: "views.transforms.builtin.summarize.name",
+    descriptionKey: "views.transforms.builtin.summarize.description",
   },
 ];
 
 export const TransformsView: React.FC = () => {
+  const { t } = useTranslation();
   const { settings } = useSettings();
   const bindings = settings?.bindings || {};
 
   return (
     <div className="w-full max-w-4xl mx-auto py-4 space-y-6">
       <header>
-        <h1 className="font-serif italic text-4xl text-ez-text">Transforms</h1>
+        <h1 className="font-serif italic text-4xl text-ez-text">
+          {t("sidebar.transforms")}
+        </h1>
         <p className="text-xs uppercase tracking-wider font-mono text-mid-gray mt-1">
-          Beta
+          {t("views.transforms.beta")}
         </p>
       </header>
 
@@ -49,24 +53,23 @@ export const TransformsView: React.FC = () => {
         <Wand2 className="text-accent shrink-0 mt-1" size={20} />
         <div>
           <h2 className="font-serif italic text-2xl">
-            Transform funciona en cualquier app
+            {t("views.transforms.intro.title")}
           </h2>
           <p className="text-sm text-mid-gray max-w-2xl mt-1">
-            Copiá texto en cualquier ventana, apretá el hotkey del
-            transform y el LLM lo reescribe + pega.
+            {t("views.transforms.intro.description")}
           </p>
         </div>
       </div>
 
       <section className="space-y-3">
-        {BUILTIN_TRANSFORMS.map((t) => {
-          const binding = (bindings as any)[t.id];
-          const hotkey =
-            binding?.current_binding?.trim() || "Sin asignar";
-          const isAssigned = hotkey !== "Sin asignar";
+        {BUILTIN_TRANSFORMS.map((transform) => {
+          const binding = (bindings as any)[transform.id];
+          const unassigned = t("views.transforms.unassigned");
+          const hotkey = binding?.current_binding?.trim() || unassigned;
+          const isAssigned = hotkey !== unassigned;
           return (
             <div
-              key={t.id}
+              key={transform.id}
               className={`border rounded-xl p-5 flex items-center gap-4 transition-colors ${
                 isAssigned
                   ? "border-mid-gray/20 hover:border-mid-gray/40"
@@ -74,9 +77,11 @@ export const TransformsView: React.FC = () => {
               }`}
             >
               <div className="flex-1">
-                <div className="font-serif italic text-2xl">{t.name}</div>
+                <div className="font-serif italic text-2xl">
+                  {t(transform.nameKey)}
+                </div>
                 <div className="text-sm text-mid-gray mt-1">
-                  {t.description}
+                  {t(transform.descriptionKey)}
                 </div>
               </div>
               <kbd
@@ -94,8 +99,7 @@ export const TransformsView: React.FC = () => {
       </section>
 
       <p className="text-xs text-mid-gray">
-        Para asignar hotkeys: Settings → General → grupo &ldquo;Ezequielito
-        shortcuts&rdquo;.
+        {t("views.transforms.assignHint")}
       </p>
     </div>
   );

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { useSettings } from "../../hooks/useSettings";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
@@ -22,6 +23,7 @@ interface AppPromptMappingProps {
  */
 export const AppPromptMapping: React.FC<AppPromptMappingProps> = React.memo(
   ({ descriptionMode = "tooltip", grouped = false }) => {
+    const { t } = useTranslation();
     const { getSetting, updateSetting, isUpdating } = useSettings();
     const map = (getSetting("app_prompt_map") || {}) as {
       [key in string]: string;
@@ -34,11 +36,16 @@ export const AppPromptMapping: React.FC<AppPromptMappingProps> = React.memo(
     const validPromptIds = ["ez_casual", "ez_formal", "ez_code"];
 
     const handleAdd = () => {
-      const app = newApp.trim().toLowerCase().replace(/\.exe$/i, "");
+      const app = newApp
+        .trim()
+        .toLowerCase()
+        .replace(/\.exe$/i, "");
       const prompt = newPrompt.trim();
       if (!app || !prompt) return;
       if (map[app]) {
-        toast.error(`Mapping para "${app}" ya existe`);
+        toast.error(
+          t("settings.ezequielito.appPromptMapping.duplicate", { app }),
+        );
         return;
       }
       updateSetting("app_prompt_map", { ...map, [app]: prompt });
@@ -59,11 +66,11 @@ export const AppPromptMapping: React.FC<AppPromptMappingProps> = React.memo(
     const promptLabel = (id: string) => {
       switch (id) {
         case "ez_casual":
-          return "Casual";
+          return t("settings.ezequielito.appPromptMapping.prompts.casual");
         case "ez_formal":
-          return "Formal";
+          return t("settings.ezequielito.appPromptMapping.prompts.formal");
         case "ez_code":
-          return "Code";
+          return t("settings.ezequielito.appPromptMapping.prompts.code");
         default:
           return id;
       }
@@ -72,8 +79,8 @@ export const AppPromptMapping: React.FC<AppPromptMappingProps> = React.memo(
     return (
       <>
         <SettingContainer
-          title="App → Prompt mapping (Auto mode)"
-          description="Cuando usás el hotkey 'Transcribe (Auto)', el sistema detecta la app en foreground y rutea al prompt mapeado acá. Apps no listadas usan Casual por default."
+          title={t("settings.ezequielito.appPromptMapping.title")}
+          description={t("settings.ezequielito.appPromptMapping.description")}
           descriptionMode={descriptionMode}
           grouped={grouped}
         >
@@ -83,7 +90,9 @@ export const AppPromptMapping: React.FC<AppPromptMappingProps> = React.memo(
                 type="text"
                 value={newApp}
                 onChange={(e) => setNewApp(e.target.value)}
-                placeholder="exe name (ej: 'cursor', 'outlook')"
+                placeholder={t(
+                  "settings.ezequielito.appPromptMapping.appPlaceholder",
+                )}
                 variant="compact"
                 className="flex-1"
                 disabled={isUpdating("app_prompt_map")}
@@ -106,7 +115,7 @@ export const AppPromptMapping: React.FC<AppPromptMappingProps> = React.memo(
                 variant="primary"
                 size="md"
               >
-                Agregar
+                {t("common.add")}
               </Button>
             </div>
           </div>
@@ -121,19 +130,14 @@ export const AppPromptMapping: React.FC<AppPromptMappingProps> = React.memo(
             {entries
               .sort(([a], [b]) => a.localeCompare(b))
               .map(([app, prompt]) => (
-                <div
-                  key={app}
-                  className="flex items-center gap-2 py-1 text-sm"
-                >
+                <div key={app} className="flex items-center gap-2 py-1 text-sm">
                   <span className="font-mono text-accent flex-shrink-0 min-w-[120px]">
                     {app}
                   </span>
                   <span className="text-mid-gray flex-shrink-0">→</span>
                   <select
                     value={prompt}
-                    onChange={(e) =>
-                      handleChangePrompt(app, e.target.value)
-                    }
+                    onChange={(e) => handleChangePrompt(app, e.target.value)}
                     className="bg-background-ui border border-mid-gray/30 rounded px-2 py-1 text-sm flex-1"
                     disabled={isUpdating("app_prompt_map")}
                   >
@@ -148,7 +152,12 @@ export const AppPromptMapping: React.FC<AppPromptMappingProps> = React.memo(
                     disabled={isUpdating("app_prompt_map")}
                     variant="secondary"
                     size="sm"
-                    aria-label={`Eliminar mapping ${app}`}
+                    aria-label={t(
+                      "settings.ezequielito.appPromptMapping.remove",
+                      {
+                        app,
+                      },
+                    )}
                   >
                     <svg
                       className="w-3 h-3"

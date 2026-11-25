@@ -33,7 +33,10 @@ export const GeneralSettings: React.FC = () => {
           the user can rebind them. Some have empty defaults — assign a
           combo to enable. */}
       <SettingsGroup title="Ezequielito shortcuts">
-        <ShortcutInput shortcutId="transcribe_with_post_process" grouped={true} />
+        <ShortcutInput
+          shortcutId="transcribe_with_post_process"
+          grouped={true}
+        />
         <ShortcutInput shortcutId="transcribe_auto" grouped={true} />
         <ShortcutInput shortcutId="transcribe_casual" grouped={true} />
         <ShortcutInput shortcutId="transcribe_formal" grouped={true} />

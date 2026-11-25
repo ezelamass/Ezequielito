@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 
 /**
  * Brand wordmark for Ezequielito.
@@ -19,6 +20,7 @@ const HandyTextLogo = ({
   height?: number;
   className?: string;
 }) => {
+  const { t } = useTranslation();
   // Wide aspect ratio to fit "Ezequielito" — viewBox ~930x200 keeps
   // similar proportions to the original Handy logo so sizing slots in.
   return (
@@ -39,7 +41,7 @@ const HandyTextLogo = ({
         fontWeight="400"
         fill="var(--color-ez-accent, #c8ff00)"
       >
-        Ezequielito
+        {t("app.name")}
       </text>
     </svg>
   );

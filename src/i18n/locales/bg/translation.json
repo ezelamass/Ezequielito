@@ -9,6 +9,14 @@
     "cancel": "Отказ"
   },
   "sidebar": {
+    "home": "Home",
+    "insights": "Insights",
+    "dictionary": "Dictionary",
+    "snippets": "Snippets",
+    "style": "Style",
+    "transforms": "Transforms",
+    "scratchpad": "Scratchpad",
+    "settings": "Settings",
     "general": "Общи",
     "models": "Модели",
     "advanced": "Разширени",
@@ -356,6 +364,14 @@
         "add": "Добавяне",
         "remove": "Премахване на {{word}}",
         "duplicate": "„{{word}}“ вече съществува"
+      },
+      "overlayIdlePill": {
+        "title": "Always-visible pill",
+        "description": "Keep a small pill on screen while idle. Hover to see your hotkey, click to start dictating."
+      },
+      "handsFree": {
+        "title": "Hands-free (tap Space while recording)",
+        "description": "While you hold your dictation hotkey, tap Space to lock the recording: you can let go and keep talking. Tap Space again, or the ✓ on the pill, to finish. If your hotkey already uses Space (Ctrl+Space), this is skipped automatically; pick another hotkey to use it."
       }
     },
     "postProcessing": {
@@ -537,6 +553,55 @@
           "details": "Handy използва Whisper.cpp за бързо локално реч-към-текст. Благодарности на Georgi Gerganov и сътрудниците за отличната работа."
         }
       }
+    },
+    "ezequielito": {
+      "appPromptMapping": {
+        "title": "App → Prompt mapping (Auto mode)",
+        "description": "When you use the 'Transcribe (Auto)' hotkey, the system detects the foreground app and routes to the prompt mapped here. Unlisted apps use Casual by default.",
+        "appPlaceholder": "exe name (e.g. 'cursor', 'outlook')",
+        "prompts": {
+          "casual": "Casual",
+          "formal": "Formal",
+          "code": "Code"
+        },
+        "duplicate": "A mapping for \"{{app}}\" already exists",
+        "remove": "Remove mapping {{app}}"
+      },
+      "dictionarySync": {
+        "title": "Dictionary sync",
+        "description": "Sync your custom_words with a JSON file in OneDrive / Dropbox / Google Drive. The cloud service takes care of propagating it across devices.",
+        "pathPlaceholder": "C:\\Users\\…\\OneDrive\\ezequielito-dictionary.json",
+        "browse": "Browse",
+        "syncing": "Syncing...",
+        "syncNow": "Sync now",
+        "disable": "Disable",
+        "active": "Sync active: {{path}}",
+        "pathSaved": "Dictionary sync path saved",
+        "disabled": "Dictionary sync disabled",
+        "error": "Error: {{error}}",
+        "noPath": "Set up a sync path first",
+        "syncOk": "Sync OK — {{count}} words",
+        "syncOk_one": "Sync OK — {{count}} word",
+        "syncFailed": "Sync failed: {{error}}",
+        "syncError": "Sync error: {{error}}"
+      },
+      "snippets": {
+        "title": "Snippets",
+        "description": "Voice triggers that expand into text. E.g. say 'my email' and your full address gets pasted. Case-insensitive, whole-word match.",
+        "triggerPlaceholder": "trigger (e.g. 'my email')",
+        "expansionPlaceholder": "expansion (text to paste)",
+        "duplicate": "Snippet \"{{trigger}}\" already exists",
+        "tooLong": "Trigger ≤ 80 chars, expansion ≤ 2000 chars",
+        "remove": "Remove snippet {{trigger}}"
+      },
+      "voiceCommands": {
+        "title": "Voice commands",
+        "description": "Voice commands to launch apps. Hold the voice command hotkey + say the phrase. Targets: URIs (claude://, whatsapp://, notion://) or direct exes (chrome.exe, calc.exe).",
+        "phrasePlaceholder": "phrase (e.g. 'claude code')",
+        "targetPlaceholder": "target (e.g. 'claude://')",
+        "duplicate": "Command \"{{phrase}}\" already exists",
+        "remove": "Remove voice command {{phrase}}"
+      }
     }
   },
   "footer": {
@@ -607,6 +672,206 @@
   },
   "overlay": {
     "transcribing": "Транскрибиране...",
-    "processing": "Обработка..."
+    "processing": "Обработка...",
+    "cancel": "Cancel",
+    "confirm": "Finish and paste",
+    "handsFree": "HANDS-FREE",
+    "idle": {
+      "start": "Start dictating"
+    },
+    "errors": {
+      "micDenied": "Microphone access is blocked",
+      "noMic": "No microphone found",
+      "noSpeech": "Didn't catch anything",
+      "transcriptionFailed": "Couldn't transcribe",
+      "pasteFailed": "Couldn't paste the text",
+      "commandNotFound": "No command matches that",
+      "generic": "Something went wrong"
+    }
+  },
+  "app": {
+    "name": "Ezequielito"
+  },
+  "views": {
+    "home": {
+      "tagline": "Your dictation, your brand, your workflow.",
+      "stats": {
+        "wordsDictated": "Words dictated",
+        "recentDictations": "Recent dictations",
+        "streak": "Streak",
+        "streakDays": "{{count}} days",
+        "streakDays_one": "{{count}} day"
+      },
+      "hotkeys": {
+        "title": "Your hotkeys",
+        "empty": "You don't have any hotkeys assigned yet. Go to <path>Settings → General</path> to set up your first transcribe shortcut."
+      },
+      "quickStart": {
+        "title": "To start dictating",
+        "description": "Hold down your transcribe hotkey and speak. Release to transcribe and paste."
+      }
+    },
+    "insights": {
+      "tabs": {
+        "usage": "Your usage",
+        "voice": "Your voice"
+      },
+      "loading": "Loading stats...",
+      "stats": {
+        "wordsDictated": "Words dictated",
+        "wordsChange": "{{change}}% this month",
+        "totalDictations": "Total dictations",
+        "thisWeek": "{{count}} this week",
+        "streak": "Streak",
+        "currentStreak": "Current streak",
+        "streakDays": "{{count}} days",
+        "streakDays_one": "{{count}} day",
+        "longestStreak": "Longest: {{count}} days",
+        "longestStreak_one": "Longest: {{count}} day"
+      },
+      "pending": {
+        "wpm": {
+          "title": "Words per minute",
+          "description": "Requires capturing the duration of each recording. Next bundle."
+        },
+        "fixes": {
+          "title": "Fixes applied",
+          "description": "Requires a per-dictation counter of custom_words + snippet substitutions. Next bundle."
+        }
+      },
+      "calendar": {
+        "noStreak": "No active streak",
+        "streakTitle": "{{count}}-day streak",
+        "streakTitle_one": "{{count}}-day streak",
+        "bestStreak": "Best streak · {{count}} days",
+        "bestStreak_one": "Best streak · {{count}} day",
+        "less": "Less",
+        "more": "More",
+        "weekdays": {
+          "monday": "M",
+          "tuesday": "T",
+          "wednesday": "W",
+          "thursday": "T",
+          "friday": "F",
+          "saturday": "S",
+          "sunday": "S"
+        },
+        "dayTooltip": "{{date}} · {{count}} dictations",
+        "dayTooltip_one": "{{date}} · {{count}} dictation"
+      },
+      "voice": {
+        "title": "Voice analytics",
+        "description": "Detected accent, speaking speed, most-used languages. Requires additional recorder instrumentation. Next bundle."
+      },
+      "comingSoon": "Coming soon"
+    },
+    "dictionary": {
+      "tabs": {
+        "all": "All",
+        "personal": "Personal",
+        "shared": "Shared with team"
+      },
+      "promo": {
+        "title": "Ezequielito writes like <emphasis>you</emphasis>.",
+        "description": "Add proper names, your industry's jargon, client brands. Every dictation respects them and corrects them automatically, even if the model misheard them."
+      },
+      "sharedUnavailable": "Team sharing isn't available yet. For now, add it manually in <path>Settings → Advanced</path>."
+    },
+    "snippets": {
+      "tabs": {
+        "all": "All",
+        "personal": "Personal",
+        "shared": "Shared with team"
+      },
+      "promo": {
+        "title": "What <emphasis>you</emphasis> don't have to retype.",
+        "description": "Save anything you type often — your email, an intro, a prompt — and say a word or phrase to replace it in place."
+      },
+      "sharedUnavailable": "Team sharing isn't available yet."
+    },
+    "style": {
+      "categories": {
+        "personal": {
+          "label": "Personal messages",
+          "description": "Applies to personal messaging apps."
+        },
+        "work": {
+          "label": "Work messages",
+          "description": "Applies to work messaging apps."
+        },
+        "email": {
+          "label": "Email",
+          "description": "Applies to email clients."
+        },
+        "other": {
+          "label": "Other",
+          "description": "Productivity apps / browsers / IDEs. If you want everything in code, assign it manually in App Prompt Map under Advanced."
+        },
+        "autoCleanup": {
+          "label": "Auto Cleanup",
+          "description": "Automatic cleanup without an LLM — next bundle."
+        }
+      },
+      "beta": "Beta",
+      "apps": "Apps: {{apps}}",
+      "autoCleanupPending": "Auto Cleanup isn't implemented yet. For now, all dictations go through the LLM if you have post-processing enabled.",
+      "styles": {
+        "formal": {
+          "title": "Formal",
+          "subtitle": "Caps + Punctuation",
+          "example": "Hi, are you free for lunch tomorrow? Let me know if 12 works for you."
+        },
+        "casual": {
+          "title": "Casual",
+          "subtitle": "Caps + Less punctuation",
+          "example": "Hi are you free for lunch tomorrow? 12 if that works for you"
+        },
+        "veryCasual": {
+          "title": "very casual",
+          "subtitle": "No caps + less punctuation",
+          "example": "hi are you free for lunch tomorrow? 12 if that works for you"
+        }
+      },
+      "mixed": "Mixed style in this context. Click a card to make it uniform."
+    },
+    "transforms": {
+      "beta": "Beta",
+      "intro": {
+        "title": "Transform works in any app",
+        "description": "Copy text in any window, press the transform's hotkey, and the LLM rewrites + pastes it."
+      },
+      "builtin": {
+        "polish": {
+          "name": "Polish",
+          "description": "Improves clarity and concision without changing the meaning."
+        },
+        "promptEngineer": {
+          "name": "Prompt Engineer",
+          "description": "Rewrites the text as a structured LLM prompt."
+        },
+        "summarize": {
+          "name": "Summarize",
+          "description": "Summary in 3-5 sentences, same language."
+        }
+      },
+      "unassigned": "Unassigned",
+      "assignHint": "To assign hotkeys: Settings → General → “Ezequielito shortcuts” group."
+    },
+    "scratchpad": {
+      "description": "Free-form editor. Assign a hotkey to <binding>Transcribe to Scratchpad</binding> in Settings → General to dictate straight into it.",
+      "noHotkey": "No hotkey assigned",
+      "placeholder": "Start typing, or dictate here using the Transcribe to Scratchpad hotkey...",
+      "wordCount": "{{count}} words",
+      "wordCount_one": "{{count}} word",
+      "charCount": "{{count}} characters",
+      "charCount_one": "{{count}} character",
+      "copyAll": "Copy all",
+      "clear": "Clear",
+      "hint": "Content persists locally between sessions. Dictations are appended at the end, separated by a line break. To send text to another app, use Copy all and paste it there.",
+      "appended": "Text added to Scratchpad",
+      "copied": "Copied to clipboard",
+      "copyFailed": "Couldn't copy",
+      "confirmClear": "Clear all Scratchpad content? This action can't be undone."
+    }
   }
 }

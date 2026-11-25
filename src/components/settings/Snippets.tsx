@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { useSettings } from "../../hooks/useSettings";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
@@ -22,6 +23,7 @@ interface SnippetsProps {
  */
 export const Snippets: React.FC<SnippetsProps> = React.memo(
   ({ descriptionMode = "tooltip", grouped = false }) => {
+    const { t } = useTranslation();
     const { getSetting, updateSetting, isUpdating } = useSettings();
     const snippets: Snippet[] = getSetting("snippets") || [];
 
@@ -33,12 +35,14 @@ export const Snippets: React.FC<SnippetsProps> = React.memo(
       const expansion = newExpansion.trim();
       if (!trigger || !expansion) return;
 
-      if (snippets.some((s) => s.trigger.toLowerCase() === trigger.toLowerCase())) {
-        toast.error(`Snippet "${trigger}" ya existe`);
+      if (
+        snippets.some((s) => s.trigger.toLowerCase() === trigger.toLowerCase())
+      ) {
+        toast.error(t("settings.ezequielito.snippets.duplicate", { trigger }));
         return;
       }
       if (trigger.length > 80 || expansion.length > 2000) {
-        toast.error("Trigger ≤ 80 chars, expansión ≤ 2000 chars");
+        toast.error(t("settings.ezequielito.snippets.tooLong"));
         return;
       }
       updateSetting("snippets", [...snippets, { trigger, expansion }]);
@@ -56,8 +60,8 @@ export const Snippets: React.FC<SnippetsProps> = React.memo(
     return (
       <>
         <SettingContainer
-          title="Snippets"
-          description="Voice triggers que se expanden a texto. Ej: decí 'mi email' y se pega tu dirección completa. Match case-insensitive de palabra completa."
+          title={t("settings.ezequielito.snippets.title")}
+          description={t("settings.ezequielito.snippets.description")}
           descriptionMode={descriptionMode}
           grouped={grouped}
         >
@@ -67,7 +71,9 @@ export const Snippets: React.FC<SnippetsProps> = React.memo(
                 type="text"
                 value={newTrigger}
                 onChange={(e) => setNewTrigger(e.target.value)}
-                placeholder="trigger (ej: 'mi email')"
+                placeholder={t(
+                  "settings.ezequielito.snippets.triggerPlaceholder",
+                )}
                 variant="compact"
                 className="flex-1"
                 disabled={isUpdating("snippets")}
@@ -76,7 +82,9 @@ export const Snippets: React.FC<SnippetsProps> = React.memo(
                 type="text"
                 value={newExpansion}
                 onChange={(e) => setNewExpansion(e.target.value)}
-                placeholder="expansion (texto a pegar)"
+                placeholder={t(
+                  "settings.ezequielito.snippets.expansionPlaceholder",
+                )}
                 variant="compact"
                 className="flex-[2]"
                 disabled={isUpdating("snippets")}
@@ -97,7 +105,7 @@ export const Snippets: React.FC<SnippetsProps> = React.memo(
                 variant="primary"
                 size="md"
               >
-                Agregar
+                {t("common.add")}
               </Button>
             </div>
           </div>
@@ -126,7 +134,9 @@ export const Snippets: React.FC<SnippetsProps> = React.memo(
                   disabled={isUpdating("snippets")}
                   variant="secondary"
                   size="sm"
-                  aria-label={`Eliminar snippet ${snippet.trigger}`}
+                  aria-label={t("settings.ezequielito.snippets.remove", {
+                    trigger: snippet.trigger,
+                  })}
                 >
                   <svg
                     className="w-3 h-3"

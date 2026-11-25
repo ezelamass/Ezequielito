@@ -28,7 +28,11 @@
 
 :root {
   /* Typography */
-  font-family: "DM Sans", system-ui, -apple-system, sans-serif;
+  font-family:
+    "DM Sans",
+    system-ui,
+    -apple-system,
+    sans-serif;
   font-size: 15px;
   line-height: 1.5;
   font-weight: 400;
@@ -99,7 +103,9 @@
     border: 1px solid var(--color-ez-border);
     border-radius: 12px;
     background-color: var(--color-ez-surface);
-    transition: transform 0.2s ease, border-color 0.2s ease;
+    transition:
+      transform 0.2s ease,
+      border-color 0.2s ease;
   }
   .ez-card:hover {
     transform: translateY(-2px);

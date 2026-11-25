@@ -97,8 +97,8 @@ export const SettingsContainer: React.FC = () => {
   const [active, setActive] = useState<SubSection>("general");
 
   const available = SUB_SECTIONS.filter((s) => s.enabled(settings));
-  const Active = available.find((s) => s.id === active)?.component
-    ?? GeneralSettings;
+  const Active =
+    available.find((s) => s.id === active)?.component ?? GeneralSettings;
 
   return (
     <div className="w-full max-w-5xl flex gap-6">

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useSettings } from "../../hooks/useSettings";
 import { Input } from "../ui/Input";
@@ -19,6 +20,7 @@ interface DictionarySyncProps {
  */
 export const DictionarySync: React.FC<DictionarySyncProps> = React.memo(
   ({ descriptionMode = "tooltip", grouped = false }) => {
+    const { t } = useTranslation();
     const { getSetting } = useSettings();
     const syncPath = getSetting("dictionary_sync_path") || "";
     const [draft, setDraft] = useState(syncPath);
@@ -35,43 +37,59 @@ export const DictionarySync: React.FC<DictionarySyncProps> = React.memo(
         if (typeof selected === "string") {
           setDraft(selected);
           await commands.setDictionarySyncPath(selected);
-          toast.success("Dictionary sync path saved");
+          toast.success(t("settings.ezequielito.dictionarySync.pathSaved"));
         }
       } catch (e) {
-        toast.error(`Error: ${String(e)}`);
+        toast.error(
+          t("settings.ezequielito.dictionarySync.error", { error: String(e) }),
+        );
       }
     };
 
     const handleSavePath = async () => {
       try {
         await commands.setDictionarySyncPath(draft);
-        toast.success("Dictionary sync path saved");
+        toast.success(t("settings.ezequielito.dictionarySync.pathSaved"));
       } catch (e) {
-        toast.error(`Error: ${String(e)}`);
+        toast.error(
+          t("settings.ezequielito.dictionarySync.error", { error: String(e) }),
+        );
       }
     };
 
     const handleClear = async () => {
       setDraft("");
       await commands.setDictionarySyncPath("");
-      toast.success("Dictionary sync disabled");
+      toast.success(t("settings.ezequielito.dictionarySync.disabled"));
     };
 
     const handleSyncNow = async () => {
       if (!syncPath) {
-        toast.error("Configurá una ruta de sync primero");
+        toast.error(t("settings.ezequielito.dictionarySync.noPath"));
         return;
       }
       setIsSyncing(true);
       try {
         const result = await commands.syncDictionaryNow();
         if (result.status === "ok") {
-          toast.success(`Sync OK — ${result.data.length} palabras`);
+          toast.success(
+            t("settings.ezequielito.dictionarySync.syncOk", {
+              count: result.data.length,
+            }),
+          );
         } else {
-          toast.error(`Sync falló: ${result.error}`);
+          toast.error(
+            t("settings.ezequielito.dictionarySync.syncFailed", {
+              error: result.error,
+            }),
+          );
         }
       } catch (e) {
-        toast.error(`Sync error: ${String(e)}`);
+        toast.error(
+          t("settings.ezequielito.dictionarySync.syncError", {
+            error: String(e),
+          }),
+        );
       } finally {
         setIsSyncing(false);
       }
@@ -79,8 +97,8 @@ export const DictionarySync: React.FC<DictionarySyncProps> = React.memo(
 
     return (
       <SettingContainer
-        title="Dictionary sync"
-        description="Sincronizá tu custom_words con un archivo JSON en OneDrive / Dropbox / Google Drive. El servicio de cloud se encarga de propagar entre dispositivos."
+        title={t("settings.ezequielito.dictionarySync.title")}
+        description={t("settings.ezequielito.dictionarySync.description")}
         descriptionMode={descriptionMode}
         grouped={grouped}
       >
@@ -90,12 +108,14 @@ export const DictionarySync: React.FC<DictionarySyncProps> = React.memo(
               type="text"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="C:\Users\…\OneDrive\ezequielito-dictionary.json"
+              placeholder={t(
+                "settings.ezequielito.dictionarySync.pathPlaceholder",
+              )}
               variant="compact"
               className="flex-1"
             />
             <Button onClick={handlePickFile} variant="secondary" size="md">
-              Examinar
+              {t("settings.ezequielito.dictionarySync.browse")}
             </Button>
             <Button
               onClick={handleSavePath}
@@ -103,7 +123,7 @@ export const DictionarySync: React.FC<DictionarySyncProps> = React.memo(
               size="md"
               disabled={draft === syncPath}
             >
-              Guardar
+              {t("common.save")}
             </Button>
           </div>
           <div className="flex items-center gap-2">
@@ -113,16 +133,23 @@ export const DictionarySync: React.FC<DictionarySyncProps> = React.memo(
               size="md"
               disabled={!syncPath || isSyncing}
             >
-              {isSyncing ? "Sincronizando..." : "Sync now"}
+              {isSyncing
+                ? t("settings.ezequielito.dictionarySync.syncing")
+                : t("settings.ezequielito.dictionarySync.syncNow")}
             </Button>
             {syncPath && (
               <Button onClick={handleClear} variant="secondary" size="md">
-                Desactivar
+                {t("settings.ezequielito.dictionarySync.disable")}
               </Button>
             )}
             {syncPath && (
-              <span className="text-xs text-mid-gray truncate flex-1" title={syncPath}>
-                Sync activo: {syncPath}
+              <span
+                className="text-xs text-mid-gray truncate flex-1"
+                title={syncPath}
+              >
+                {t("settings.ezequielito.dictionarySync.active", {
+                  path: syncPath,
+                })}
               </span>
             )}
           </div>
