@@ -16,6 +16,7 @@ mod tauri_impl;
 use log::{error, info, warn};
 use serde::Serialize;
 use specta::Type;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_autostart::ManagerExt;
 
@@ -56,22 +57,87 @@ pub fn init_shortcuts(app: &AppHandle) {
     }
 }
 
+/// A shortcut that only exists while a recording is in progress (Escape to
+/// cancel, the hands-free key).
+///
+/// Start and stop each ask for a state and spawn a task to apply it. Those
+/// tasks can run in either order: after a very short recording the
+/// "unregister" could run before the "register", leaving the key captured
+/// system-wide until the app quit. So start/stop only record what is wanted
+/// (`requested`), and every task applies the latest request, whichever
+/// scheduled it. The mutex also serialises those passes.
+struct DynamicShortcut {
+    #[cfg_attr(target_os = "linux", allow(dead_code))]
+    binding_id: &'static str,
+    requested: AtomicBool,
+    #[cfg_attr(target_os = "linux", allow(dead_code))]
+    registered: std::sync::Mutex<bool>,
+}
+
+impl DynamicShortcut {
+    const fn new(binding_id: &'static str) -> Self {
+        Self {
+            binding_id,
+            requested: AtomicBool::new(false),
+            registered: std::sync::Mutex::new(false),
+        }
+    }
+
+    /// Records the wanted state and applies it off the calling thread
+    /// (start/stop run on the shortcut handler, which must not block on
+    /// registration).
+    fn request(&'static self, app: &AppHandle, wanted: bool) {
+        self.requested.store(wanted, Ordering::SeqCst);
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            self.reconcile(&app);
+        });
+    }
+
+    fn reconcile(&self, app: &AppHandle) {
+        // Dynamic registration is unstable on Linux: these shortcuts are
+        // never registered there.
+        #[cfg(target_os = "linux")]
+        {
+            let _ = app;
+        }
+
+        #[cfg(not(target_os = "linux"))]
+        {
+            let mut registered = self.registered.lock().unwrap_or_else(|e| e.into_inner());
+            let requested = self.requested.load(Ordering::SeqCst);
+            if requested == *registered {
+                return;
+            }
+            let Some(binding) = get_settings(app).bindings.get(self.binding_id).cloned() else {
+                return;
+            };
+            if requested {
+                match register_shortcut(app, binding) {
+                    Ok(()) => *registered = true,
+                    Err(e) => error!("Failed to register '{}' shortcut: {}", self.binding_id, e),
+                }
+            } else {
+                match unregister_shortcut(app, binding) {
+                    Ok(()) => *registered = false,
+                    Err(e) => error!("Failed to unregister '{}' shortcut: {}", self.binding_id, e),
+                }
+            }
+        }
+    }
+}
+
+static CANCEL_SHORTCUT: DynamicShortcut = DynamicShortcut::new("cancel");
+static HANDS_FREE_SHORTCUT: DynamicShortcut = DynamicShortcut::new("hands_free_toggle");
+
 /// Register the cancel shortcut (called when recording starts)
 pub fn register_cancel_shortcut(app: &AppHandle) {
-    let settings = get_settings(app);
-    match settings.keyboard_implementation {
-        KeyboardImplementation::Tauri => tauri_impl::register_cancel_shortcut(app),
-        KeyboardImplementation::HandyKeys => handy_keys::register_cancel_shortcut(app),
-    }
+    CANCEL_SHORTCUT.request(app, true);
 }
 
 /// Unregister the cancel shortcut (called when recording stops)
 pub fn unregister_cancel_shortcut(app: &AppHandle) {
-    let settings = get_settings(app);
-    match settings.keyboard_implementation {
-        KeyboardImplementation::Tauri => tauri_impl::unregister_cancel_shortcut(app),
-        KeyboardImplementation::HandyKeys => handy_keys::unregister_cancel_shortcut(app),
-    }
+    CANCEL_SHORTCUT.request(app, false);
 }
 
 /// Phase 6: register the hands-free toggle shortcut (Space). Called when
@@ -120,20 +186,13 @@ pub fn register_hands_free_shortcut(app: &AppHandle) {
             }
         }
     }
-    match settings.keyboard_implementation {
-        KeyboardImplementation::Tauri => tauri_impl::register_hands_free_shortcut(app),
-        KeyboardImplementation::HandyKeys => handy_keys::register_hands_free_shortcut(app),
-    }
+    HANDS_FREE_SHORTCUT.request(app, true);
 }
 
 /// Phase 6: unregister the hands-free toggle shortcut (Space). Called when
 /// recording stops.
 pub fn unregister_hands_free_shortcut(app: &AppHandle) {
-    let settings = get_settings(app);
-    match settings.keyboard_implementation {
-        KeyboardImplementation::Tauri => tauri_impl::unregister_hands_free_shortcut(app),
-        KeyboardImplementation::HandyKeys => handy_keys::unregister_hands_free_shortcut(app),
-    }
+    HANDS_FREE_SHORTCUT.request(app, false);
 }
 
 /// Register a shortcut using the appropriate implementation
