@@ -1,6 +1,6 @@
 [package]
 name = "handy"
-version = "0.2.0"
+version = "0.2.1"
 description = "Vento Voice - dictation app (built on Handy by cjpais, MIT)"
 authors = ["Ezequiel Lamas <ezequiellamasx@gmail.com>"]
 edition = "2021"
