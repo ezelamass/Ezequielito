@@ -1,31 +1,47 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commands } from "@/bindings";
+import { commands, type HistoryEntry } from "@/bindings";
+import {
+  DEFAULT_TYPING_WPM,
+  MIN_SPEECH_MS,
+  appBreakdown,
+  calendarWeeks,
+  computeStats,
+  displayAppName,
+  splitHoursMinutes,
+  timeSavedMinutes,
+  wordsPerMinute,
+  type AppBreakdown,
+  type CalendarCell,
+  type Stats,
+} from "@/lib/insights";
 
 /**
- * Phase 14 (Bundle 2) — Insights view.
+ * Insights view.
  *
- * Frontend-only: pulls the last N=500 entries from the existing history
- * table via getHistoryEntries(null, N) and computes stats client-side.
- * No backend schema migration — keeps the change low-risk. Categories
- * marked "instrumentation pending" (WPM, app breakdown) will be filled
- * in a follow-up bundle that captures duration_ms / active_app per
- * dictation.
+ * Pulls the last N=500 entries from the history table via
+ * getHistoryEntries(null, N) and derives every number client-side with the
+ * pure functions in `@/lib/insights`. Speed, time saved and the per-app
+ * breakdown only count entries that carry `duration_ms` / `app_name`, which
+ * older entries do not have.
  */
 
 type Tab = "usage" | "voice";
 
-interface Entry {
-  id: number;
-  timestamp: number; // unix seconds
-  transcription_text: string;
-  post_processed_text: string | null;
+interface Insights {
+  stats: Stats;
+  wpm: number | null;
+  savedMinutes: number | null;
+  apps: AppBreakdown;
+  weeks: CalendarCell[][];
 }
 
 export const InsightsView: React.FC = () => {
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("usage");
-  const [entries, setEntries] = useState<Entry[]>([]);
+  const [entries, setEntries] = useState<HistoryEntry[]>([]);
+  // "Today" for the stats; refreshed together with the entries.
+  const [now, setNow] = useState(() => new Date());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -33,7 +49,8 @@ export const InsightsView: React.FC = () => {
       try {
         const result = await commands.getHistoryEntries(null, 500);
         if (result.status === "ok") {
-          setEntries((result.data.entries || []) as Entry[]);
+          setEntries(result.data.entries || []);
+          setNow(new Date());
         }
       } catch (e) {
         console.debug("Insights fetch failed:", e);
@@ -43,7 +60,16 @@ export const InsightsView: React.FC = () => {
     })();
   }, []);
 
-  const stats = useMemo(() => computeStats(entries), [entries]);
+  const insights = useMemo<Insights>(
+    () => ({
+      stats: computeStats(entries, now),
+      wpm: wordsPerMinute(entries),
+      savedMinutes: timeSavedMinutes(entries),
+      apps: appBreakdown(entries),
+      weeks: calendarWeeks(entries, now),
+    }),
+    [entries, now],
+  );
 
   return (
     <div className="w-full max-w-5xl mx-auto py-4 space-y-6">
@@ -67,7 +93,7 @@ export const InsightsView: React.FC = () => {
           {t("views.insights.loading")}
         </div>
       ) : tab === "usage" ? (
-        <UsageTab stats={stats} entries={entries} />
+        <UsageTab insights={insights} />
       ) : (
         <VoiceTab />
       )}
@@ -75,8 +101,32 @@ export const InsightsView: React.FC = () => {
   );
 };
 
-function UsageTab({ stats, entries }: { stats: Stats; entries: Entry[] }) {
+function UsageTab({ insights }: { insights: Insights }) {
   const { t } = useTranslation();
+  const { stats, wpm, savedMinutes, apps, weeks } = insights;
+  const notEnoughData = {
+    emptyTitle: t("views.insights.notEnoughData.title"),
+    emptyNote: t("views.insights.notEnoughData.description", {
+      seconds: MIN_SPEECH_MS / 1000,
+    }),
+  };
+
+  let savedValue: string | null = null;
+  if (savedMinutes !== null) {
+    const { hours, minutes } = splitHoursMinutes(savedMinutes);
+    const total = hours * 60 + minutes;
+    if (total <= 60) {
+      savedValue = t("views.insights.timeSaved.minutes", { minutes: total });
+    } else if (minutes === 0) {
+      savedValue = t("views.insights.timeSaved.hours", { hours });
+    } else {
+      savedValue = t("views.insights.timeSaved.hoursMinutes", {
+        hours,
+        minutes,
+      });
+    }
+  }
+
   return (
     <>
       {/* Top stat cards */}
@@ -113,15 +163,21 @@ function UsageTab({ stats, entries }: { stats: Stats; entries: Entry[] }) {
         />
       </section>
 
-      {/* WPM & Fixes — instrumentation pending */}
+      {/* Speed & time saved — only from entries with a recorded duration */}
       <section className="grid grid-cols-2 gap-4">
-        <PendingCard
-          title={t("views.insights.pending.wpm.title")}
-          description={t("views.insights.pending.wpm.description")}
+        <MetricCard
+          label={t("views.insights.speed.label")}
+          value={wpm !== null ? Math.round(wpm).toLocaleString() : null}
+          note={t("views.insights.speed.note", { wpm: DEFAULT_TYPING_WPM })}
+          {...notEnoughData}
         />
-        <PendingCard
-          title={t("views.insights.pending.fixes.title")}
-          description={t("views.insights.pending.fixes.description")}
+        <MetricCard
+          label={t("views.insights.timeSaved.label")}
+          value={savedValue}
+          note={t("views.insights.timeSaved.note", {
+            wpm: DEFAULT_TYPING_WPM,
+          })}
+          {...notEnoughData}
         />
       </section>
 
@@ -141,7 +197,7 @@ function UsageTab({ stats, entries }: { stats: Stats; entries: Entry[] }) {
             })}
           </span>
         </div>
-        <StreakCalendar entries={entries} />
+        <StreakCalendar weeks={weeks} />
         <div className="flex items-center gap-2 text-xs text-mid-gray">
           <span>{t("views.insights.calendar.less")}</span>
           <div className="flex gap-1">
@@ -155,6 +211,14 @@ function UsageTab({ stats, entries }: { stats: Stats; entries: Entry[] }) {
           </div>
           <span>{t("views.insights.calendar.more")}</span>
         </div>
+      </section>
+
+      {/* Words per app */}
+      <section className="border border-mid-gray/20 rounded-xl p-5 space-y-4">
+        <h2 className="font-serif italic text-2xl">
+          {t("views.insights.apps.title")}
+        </h2>
+        <AppUsageList apps={apps} />
       </section>
     </>
   );
@@ -233,180 +297,136 @@ function BigStatCard({
   );
 }
 
-function PendingCard({
-  title,
-  description,
+function MetricCard({
+  label,
+  value,
+  note,
+  emptyTitle,
+  emptyNote,
 }: {
-  title: string;
-  description: string;
+  label: string;
+  /** `null` when there is not enough data to show a number. */
+  value: string | null;
+  note: string;
+  emptyTitle: string;
+  emptyNote: string;
 }) {
   return (
-    <div className="border border-dashed border-mid-gray/40 rounded-xl p-5">
-      <div className="text-mid-gray text-xs uppercase tracking-wider mb-2">
-        {title}
+    <div className="border border-mid-gray/20 rounded-xl p-5 hover:border-mid-gray/40 transition-colors">
+      {value !== null ? (
+        <div className="text-3xl font-light">{value}</div>
+      ) : (
+        <div className="font-serif italic text-xl text-mid-gray">
+          {emptyTitle}
+        </div>
+      )}
+      <div className="text-xs uppercase tracking-wider text-mid-gray mt-2">
+        {label}
       </div>
-      <div className="font-serif italic text-xl text-mid-gray">—</div>
-      <p className="text-xs text-mid-gray mt-3">{description}</p>
+      <p className="text-xs text-mid-gray mt-3">
+        {value !== null ? note : emptyNote}
+      </p>
     </div>
   );
 }
 
-// Streak calendar — last 16 weeks × 7 days
-function StreakCalendar({ entries }: { entries: Entry[] }) {
+function AppUsageList({ apps }: { apps: AppBreakdown }) {
   const { t } = useTranslation();
-  const dayCounts = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const e of entries) {
-      const d = new Date(e.timestamp * 1000);
-      const key = dayKey(d);
-      map.set(key, (map.get(key) || 0) + 1);
-    }
-    return map;
-  }, [entries]);
 
-  const today = new Date();
-  const weeks = 16;
-  // Build a grid: 7 rows (days Sun..Sat) × N columns (weeks, oldest left)
-  const startDate = new Date(today);
-  startDate.setDate(today.getDate() - weeks * 7 + 1);
-
-  const columns: Array<Array<{ date: Date; count: number }>> = [];
-  for (let w = 0; w < weeks; w++) {
-    const col: Array<{ date: Date; count: number }> = [];
-    for (let d = 0; d < 7; d++) {
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + w * 7 + d);
-      col.push({ date, count: dayCounts.get(dayKey(date)) || 0 });
-    }
-    columns.push(col);
+  if (apps.items.length === 0) {
+    return (
+      <p className="text-sm text-mid-gray">{t("views.insights.apps.empty")}</p>
+    );
   }
 
   return (
-    <div className="flex gap-1 overflow-x-auto pb-1">
-      <div className="flex flex-col gap-1 mr-2 justify-around text-xs text-mid-gray">
-        <span>{t("views.insights.calendar.weekdays.monday")}</span>
-        <span>{t("views.insights.calendar.weekdays.tuesday")}</span>
-        <span>{t("views.insights.calendar.weekdays.wednesday")}</span>
-        <span>{t("views.insights.calendar.weekdays.thursday")}</span>
-        <span>{t("views.insights.calendar.weekdays.friday")}</span>
-        <span>{t("views.insights.calendar.weekdays.saturday")}</span>
-        <span>{t("views.insights.calendar.weekdays.sunday")}</span>
-      </div>
-      {columns.map((col, ci) => (
-        <div key={ci} className="flex flex-col gap-1">
-          {col.map((cell, ri) => (
+    <>
+      <ul className="space-y-3">
+        {apps.items.map((item) => (
+          // App names are never empty, so "" is free for the merged item.
+          <li key={item.app ?? ""} className="space-y-1.5">
+            <div className="flex items-baseline justify-between gap-4">
+              <span className="text-sm truncate">
+                {item.app !== null
+                  ? displayAppName(item.app)
+                  : t("views.insights.apps.other")}
+              </span>
+              <span className="text-xs text-mid-gray font-mono shrink-0">
+                {t("views.insights.apps.words", {
+                  count: item.words,
+                  formatted: item.words.toLocaleString(),
+                })}
+              </span>
+            </div>
             <div
-              key={ri}
-              className="w-3 h-3 rounded-sm"
-              style={{
-                backgroundColor: intensityColor(intensityFor(cell.count)),
-              }}
-              title={t("views.insights.calendar.dayTooltip", {
-                date: cell.date.toLocaleDateString(),
-                count: cell.count,
-              })}
-            />
-          ))}
+              className="h-1.5 rounded-full bg-mid-gray/10 overflow-hidden"
+              aria-hidden="true"
+            >
+              <div
+                className={`h-full rounded-full ${
+                  item.app !== null ? "bg-logo-primary" : "bg-mid-gray/40"
+                }`}
+                style={{ width: `${item.share * 100}%` }}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+      {apps.untracked > 0 && (
+        <p className="text-xs text-mid-gray">
+          {t("views.insights.apps.untracked", { count: apps.untracked })}
+        </p>
+      )}
+    </>
+  );
+}
+
+// Streak calendar — one column per week, rows Monday (top) to Sunday.
+function StreakCalendar({ weeks }: { weeks: CalendarCell[][] }) {
+  const { t } = useTranslation();
+  const weekdays = [
+    t("views.insights.calendar.weekdays.monday"),
+    t("views.insights.calendar.weekdays.tuesday"),
+    t("views.insights.calendar.weekdays.wednesday"),
+    t("views.insights.calendar.weekdays.thursday"),
+    t("views.insights.calendar.weekdays.friday"),
+    t("views.insights.calendar.weekdays.saturday"),
+    t("views.insights.calendar.weekdays.sunday"),
+  ];
+
+  return (
+    <div className="flex gap-1 overflow-x-auto pb-1">
+      <div className="flex flex-col gap-1 mr-2 text-xs text-mid-gray">
+        {weekdays.map((label, row) => (
+          <span key={row} className="h-3 leading-3">
+            {label}
+          </span>
+        ))}
+      </div>
+      {weeks.map((column, ci) => (
+        <div key={ci} className="flex flex-col gap-1">
+          {column.map((cell, ri) =>
+            cell.future ? (
+              // Days that have not happened yet keep their slot but stay empty.
+              <div key={ri} className="w-3 h-3 invisible" aria-hidden="true" />
+            ) : (
+              <div
+                key={ri}
+                className="w-3 h-3 rounded-sm"
+                style={{
+                  backgroundColor: intensityColor(intensityFor(cell.count)),
+                }}
+                title={t("views.insights.calendar.dayTooltip", {
+                  date: cell.date.toLocaleDateString(),
+                  count: cell.count,
+                })}
+              />
+            ),
+          )}
         </div>
       ))}
     </div>
   );
-}
-
-interface Stats {
-  totalWords: number;
-  totalDictations: number;
-  thisWeekDictations: number;
-  wordsChangePct: number | null;
-  streak: number;
-  longestStreak: number;
-}
-
-function computeStats(entries: Entry[]): Stats {
-  if (entries.length === 0) {
-    return {
-      totalWords: 0,
-      totalDictations: 0,
-      thisWeekDictations: 0,
-      wordsChangePct: null,
-      streak: 0,
-      longestStreak: 0,
-    };
-  }
-
-  const totalWords = entries.reduce((sum, e) => sum + wordCount(text(e)), 0);
-  const totalDictations = entries.length;
-
-  const now = Date.now() / 1000;
-  const weekAgo = now - 7 * 24 * 60 * 60;
-  const thisWeekDictations = entries.filter(
-    (e) => e.timestamp >= weekAgo,
-  ).length;
-
-  // % change in word count: this 30 days vs prev 30 days
-  const day30 = now - 30 * 24 * 60 * 60;
-  const day60 = now - 60 * 24 * 60 * 60;
-  const wordsLast30 = entries
-    .filter((e) => e.timestamp >= day30)
-    .reduce((s, e) => s + wordCount(text(e)), 0);
-  const wordsPrev30 = entries
-    .filter((e) => e.timestamp >= day60 && e.timestamp < day30)
-    .reduce((s, e) => s + wordCount(text(e)), 0);
-  const wordsChangePct =
-    wordsPrev30 > 0 ? ((wordsLast30 - wordsPrev30) / wordsPrev30) * 100 : null;
-
-  // streak — consecutive days back from today w/ at least one entry
-  const days = new Set(
-    entries.map((e) => dayKey(new Date(e.timestamp * 1000))),
-  );
-  let streak = 0;
-  let longestStreak = 0;
-  // current streak
-  const today = new Date();
-  for (let i = 0; i < 365; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    if (days.has(dayKey(d))) streak++;
-    else if (i > 0) break;
-  }
-  // longest streak ever
-  const sortedDayKeys = Array.from(days).sort();
-  let current = 0;
-  let prevKey: string | null = null;
-  for (const key of sortedDayKeys) {
-    if (prevKey === null) {
-      current = 1;
-    } else {
-      const prev = new Date(prevKey);
-      const cur = new Date(key);
-      const diff = (cur.getTime() - prev.getTime()) / (24 * 60 * 60 * 1000);
-      if (Math.round(diff) === 1) current++;
-      else current = 1;
-    }
-    if (current > longestStreak) longestStreak = current;
-    prevKey = key;
-  }
-
-  return {
-    totalWords,
-    totalDictations,
-    thisWeekDictations,
-    wordsChangePct,
-    streak,
-    longestStreak,
-  };
-}
-
-function text(e: Entry): string {
-  return e.post_processed_text || e.transcription_text || "";
-}
-
-function wordCount(s: string): number {
-  return s.trim().split(/\s+/).filter(Boolean).length;
-}
-
-function dayKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function intensityFor(count: number): number {

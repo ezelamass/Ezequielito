@@ -372,6 +372,10 @@
       "handsFree": {
         "title": "Hands-free (tap Space while recording)",
         "description": "While you hold your dictation hotkey, tap Space to lock the recording: you can let go and keep talking. Tap Space again, or the ✓ on the pill, to finish. If your hotkey already uses Space (Ctrl+Space), this is skipped automatically; pick another hotkey to use it."
+      },
+      "contextAwareness": {
+        "title": "Use the app as context",
+        "description": "When a dictation is cleaned up, tell the AI which app and window the text is going to, so it matches the tone and spells the names on screen correctly. Turn it off to keep app names and window titles on this computer."
       }
     },
     "postProcessing": {
@@ -686,7 +690,10 @@
       "transcriptionFailed": "Couldn't transcribe",
       "pasteFailed": "Couldn't paste the text",
       "commandNotFound": "No command matches that",
-      "generic": "Something went wrong"
+      "generic": "Something went wrong",
+      "noSelection": "No text selected",
+      "aiNotConfigured": "AI isn't set up yet",
+      "aiFailed": "The AI didn't respond"
     }
   },
   "app": {
@@ -729,15 +736,20 @@
         "longestStreak": "Longest: {{count}} days",
         "longestStreak_one": "Longest: {{count}} day"
       },
-      "pending": {
-        "wpm": {
-          "title": "Words per minute",
-          "description": "Requires capturing the duration of each recording. Next bundle."
-        },
-        "fixes": {
-          "title": "Fixes applied",
-          "description": "Requires a per-dictation counter of custom_words + snippet substitutions. Next bundle."
-        }
+      "speed": {
+        "label": "Words per minute",
+        "note": "Typing averages about {{wpm}}"
+      },
+      "timeSaved": {
+        "label": "Time saved",
+        "minutes": "{{minutes}} min",
+        "hours": "{{hours}} h",
+        "hoursMinutes": "{{hours}} h {{minutes}} min",
+        "note": "Compared with typing at {{wpm}} words per minute"
+      },
+      "notEnoughData": {
+        "title": "Not enough data yet",
+        "description": "Shows up after about {{seconds}} seconds of dictation."
       },
       "calendar": {
         "noStreak": "No active streak",
@@ -758,6 +770,15 @@
         },
         "dayTooltip": "{{date}} · {{count}} dictations",
         "dayTooltip_one": "{{date}} · {{count}} dictation"
+      },
+      "apps": {
+        "title": "By app",
+        "words": "{{formatted}} words",
+        "words_one": "{{formatted}} word",
+        "other": "Other",
+        "empty": "No apps yet. This fills in as you dictate.",
+        "untracked": "{{count}} dictations with no app recorded",
+        "untracked_one": "{{count}} dictation with no app recorded"
       },
       "voice": {
         "title": "Voice analytics",

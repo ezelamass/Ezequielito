@@ -372,6 +372,10 @@
       "handsFree": {
         "title": "Manos libres (tocá Espacio mientras grabás)",
         "description": "Mientras mantenés tu tecla de dictado, tocá Espacio para bloquear la grabación: podés soltar y seguir hablando. Tocá Espacio de nuevo, o el ✓ de la píldora, para terminar. Si tu tecla ya usa Espacio (Ctrl+Espacio), esto se saltea solo; elegí otra tecla para usarlo."
+      },
+      "contextAwareness": {
+        "title": "Usar la app como contexto",
+        "description": "Cuando se limpia un dictado, le dice a la IA en qué app y en qué ventana va el texto, para que ajuste el tono y escriba bien los nombres que aparecen en pantalla. Apagalo para que los nombres de apps y los títulos de ventana no salgan de esta computadora."
       }
     },
     "postProcessing": {
@@ -732,15 +736,20 @@
         "longestStreak": "Más larga: {{count}} días",
         "longestStreak_one": "Más larga: {{count}} día"
       },
-      "pending": {
-        "wpm": {
-          "title": "Palabras por minuto",
-          "description": "Requiere capturar la duración de cada recording. Próximo bundle."
-        },
-        "fixes": {
-          "title": "Fixes aplicados",
-          "description": "Requiere contador de custom_words + snippets substituciones por dictado. Próximo bundle."
-        }
+      "speed": {
+        "label": "Palabras por minuto",
+        "note": "Tipeando, el promedio ronda las {{wpm}}"
+      },
+      "timeSaved": {
+        "label": "Tiempo ahorrado",
+        "minutes": "{{minutes}} min",
+        "hours": "{{hours}} h",
+        "hoursMinutes": "{{hours}} h {{minutes}} min",
+        "note": "Comparado con tipear a {{wpm}} palabras por minuto"
+      },
+      "notEnoughData": {
+        "title": "Todavía no hay datos suficientes",
+        "description": "Aparece después de unos {{seconds}} segundos de dictado."
       },
       "calendar": {
         "noStreak": "Sin racha activa",
@@ -761,6 +770,15 @@
         },
         "dayTooltip": "{{date}} · {{count}} dictados",
         "dayTooltip_one": "{{date}} · {{count}} dictado"
+      },
+      "apps": {
+        "title": "Por app",
+        "words": "{{formatted}} palabras",
+        "words_one": "{{formatted}} palabra",
+        "other": "Otras",
+        "empty": "Todavía no hay apps. Se va completando a medida que dictás.",
+        "untracked": "{{count}} dictados sin app registrada",
+        "untracked_one": "{{count}} dictado sin app registrada"
       },
       "voice": {
         "title": "Analítica de voz",

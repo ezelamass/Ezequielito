@@ -48,5 +48,8 @@ jobs:
       - name: Run ESLint
         run: bun run lint
 
+      - name: Run unit tests
+        run: bun run test:unit
+
       - name: Run prettier
         run: bun run format:check
